@@ -1,0 +1,63 @@
+#!/bin/bash -efux
+
+wGet()
+{
+	wopt='-nv --timeout 30 --tries 10 --retry-connrefused'
+	if !	wget $wopt "$@"; then
+		if [ -n "${http_proxy-}" ]; then
+			update-uk-proxy
+			. uk_proxy.sh
+		fi
+		wget $wopt "$@"
+	fi
+}
+
+tmpf=() tmpd=()
+argv=("$@")
+
+for (( i = 1; i < $#; i++ )); do
+	[[ ${argv[i-1]} = -i && ${argv[i]} = http://* ]] || continue
+	url=${argv[i]}
+	out=${TMPDIR:-/tmp}/hls$$
+	wGet -O "$out" "$url"
+	tmpf+=("$out")
+	argv[i]=$out
+	if [ "$(head -c7 "$out")" = '#EXTM3U' ]; then
+		dir=$(sha1sum <"$out")
+		dir=${TMPDIR:-/tmp}/hls-${dir:0:20}
+		mkdir -pv "$dir"
+		tmpd+=("$dir")
+		pushd "$dir"
+		perl -lne '
+			use v5.12;
+			our $base;
+			BEGIN {
+				$base = shift;
+			}
+			s/\r//g;
+			if (m,^http://,) {
+				say;
+			}
+			elsif (m,^[^#],) {
+				say "$base/$_";
+			}
+			' "${url%/*}" <"$out" >parts
+		perl -pe 's,^http://.*/,,' "$out" >new.m3u
+		wGet --continue --input-file=parts
+		argv[i]=$PWD/new.m3u
+		popd
+	fi
+done
+
+if [ "$*" = "${argv[*]-}" ]; then
+	exec ffmpeg "$@"
+fi
+
+rc=
+ffmpeg "${argv[@]}" || rc=$?
+
+[ -n "$rc" ] ||
+rm -rf "${tmpd[@]}"
+rm -f  "${tmpf[@]}"
+
+exit $rc
