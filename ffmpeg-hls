@@ -113,16 +113,25 @@ for (( i = 1; i < $#; i++ )); do
 			b=${part##*/}
 			f=$dir/$b
 			[ -f "$f" ]
-			if ffmpeg -v error -i "$f" -f null - 2>&1 |
-			   grep -v -e 'element type mismatch 1' -e 'Last message repeated'; then
-				: need recheck
-			else
-				continue
-			fi </dev/null
+			ffmpeg -v error -i "$f" -f null - 2>&1 </dev/null |
+				awk -v part="$part" '{print part"\t"$0}'
+		done <$tmpdir/parts$i |
+			perl -pe 's/ @ 0x[0-9a-f]+\]/]/' |
+			sort -t$'\t' -u -k2,2 -k1,1 >$tmpdir/parts$i.all-errors
+		n=$(wc -l <$tmpdir/parts$i)
+		cut -f2 $tmpdir/parts$i.all-errors |uniq -c |
+			awk -v n="$n" '($1<n/2){sub(" +[0-9]+ ","");print}' |
+			sort -u >$tmpdir/parts$i.real-errors
+		join -t$'\t' -12 -21 -o 1.1 $tmpdir/parts$i.{all,real}-errors >$tmpdir/parts$i.ck
+		sort -u -o $tmpdir/parts$i.ck{,}
+		while read -r part; do
+			b=${part##*/}
+			f=$dir/$b
+			[ -f "$f" ]
 			f2=$dir.2/$b
 			f3=$dir.3/$b
 			Ck1 "$part" "$f" "$f2" "$f3" </dev/null
-		done <$tmpdir/parts$i
+		done <$tmpdir/parts$i.ck
 	else
 		Ck1 "$url" "$out" "$out".{2,3}
 	fi
