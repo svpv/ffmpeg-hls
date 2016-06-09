@@ -103,7 +103,10 @@ for (( i = 1; i < $#; i++ )); do
 		argv[i]=$PWD/new.m3u
 		popd
 	fi
-	if ffmpeg -v error -i "${argv[i]}" -f null - 2>&1 | grep '.'; then
+	if ffmpeg -v error -i "${argv[i]}" -f null - 2>&1 |
+	   grep -v 'non-existing SPS 0 referenced in buffering period
+Application provided invalid, non.monotonically increasing dts to muxer
+Last message repeated'; then
 		: need recheck
 	else
 		continue
