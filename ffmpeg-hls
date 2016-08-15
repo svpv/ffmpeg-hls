@@ -2,7 +2,7 @@
 
 wGet()
 {
-	wopt='-nv --timeout 30 --tries 10 --retry-connrefused --unlink'
+	wopt='-nv --timeout 30 --tries 10 --retry-connrefused'
 	if !	wget $wopt "$@"; then
 		if [ -n "${http_proxy-}" ]; then
 			update-uk-proxy
@@ -22,9 +22,10 @@ remove_tmpdir()
 	exit $1
 }
 
-Ck1()
+DoubleCheck()
 {
 	local url="$1"; shift
+	set -- "$1" $tmpdir/out{1,2}
 	wGet -O "$2" "$url"
 	if cmp -s "$1" "$2"; then
 		rm "$2"
@@ -35,26 +36,6 @@ Ck1()
 		elif cmp -s "$2" "$3"; then
 			mv "$2" "$1"
 			rm "$3"
-		else
-			rm "$1" "$2" "$3"
-			false
-		fi
-	fi
-}
-
-Ck2()
-{
-	local url="$1"; shift
-	if cmp -s "$1" "$2"; then
-		ln -f "$1" "$2"
-	else
-		wGet -O "$3" "$url"
-		if cmp -s "$1" "$3"; then
-			ln -f "$1" "$2"
-			rm "$3"
-		elif cmp -s "$2" "$3"; then
-			ln -f "$2" "$1"
-			rm "$f3"
 		else
 			rm "$1" "$2" "$3"
 			false
@@ -78,11 +59,11 @@ for (( i = 1; i < $#; i++ )); do
 	wGet -O "$out" "$url"
 	argv[i]=$out
 	if [ "$(head -c7 "$out")" = '#EXTM3U' ]; then
-		Ck1 "$url" "$out" "$out".{2,3}
+		DoubleCheck "$url" "$out"
 		dir=$(sha1sum <"$out")
 		dir=${TMPDIR:-/tmp}/hls-${dir:0:20}
-		mkdir -pv "$dir" "$dir".{2,3}
-		hlsdirs+=("$dir" "$dir".{2,3})
+		mkdir -pv "$dir"
+		hlsdirs+=("$dir")
 		pushd "$dir"
 		perl -lne '
 			use v5.12;
@@ -131,12 +112,10 @@ Last message repeated'; then
 			b=${part##*/}
 			f=$dir/$b
 			[ -f "$f" ]
-			f2=$dir.2/$b
-			f3=$dir.3/$b
-			Ck1 "$part" "$f" "$f2" "$f3" </dev/null
+			DoubleCheck "$part" "$f" </dev/null
 		done <$tmpdir/parts$i.ck
 	else
-		Ck1 "$url" "$out" "$out".{2,3}
+		DoubleCheck "$url" "$out"
 	fi
 done
 
