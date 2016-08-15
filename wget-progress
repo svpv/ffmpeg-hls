@@ -1,0 +1,54 @@
+#!/usr/bin/perl
+use v5.12;
+
+sub du ($) {
+	my $arg = shift;
+	if (opendir my $fh, $arg) {
+		my $size;
+		local $_;
+		while (readdir $fh) {
+			next unless -f "$arg/$_";
+			$size += -s _;
+		}
+		return $size;
+	}
+	elsif (-f $arg) {
+		return -s _;
+	}
+	# not yet created?
+	return undef;
+}
+
+use constant {
+	Timeout0 => 30,
+	Timeout1 => 20,
+	Progress0 => 1<<19,
+	Progress1 => 1<<20,
+};
+
+my $ARG = shift;
+my $this = du $ARG;
+my $next = $this + Progress0;
+
+my $pid = fork // die "fork failed";
+if ($pid == 0) {
+	exec @ARGV;
+	die "cannot exec $ARGV[0]";
+}
+
+$SIG{ALRM} = sub {
+	$this = du $ARG;
+	if ($this < $next) {
+		warn "killing $ARGV[0]";
+		kill TERM => $pid;
+	}
+	$next = $this + Progress1;
+	alarm Timeout1;
+};
+
+alarm Timeout0;
+wait;
+
+exit 0 if $? == 0;
+exit $? >> 8 if $? >> 8;
+exit 255;
