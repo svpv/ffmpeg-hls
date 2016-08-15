@@ -2,13 +2,18 @@
 
 wGet()
 {
-	wopt='-nv --timeout 30 --tries 10 --retry-connrefused'
-	if !	wget $wopt "$@"; then
+	local out=.
+	if [ "$1" = -O ]; then
+		out=$2
+	fi
+	wget=("$av0dir"/wget-progress "$out" wget)
+	wopt=(-nv --timeout 30 --tries 10 --retry-connrefused)
+	if !	${wget[@]} ${wopt[@]} "$@"; then
 		if [ -n "${http_proxy-}" ]; then
 			update-uk-proxy
 			. uk_proxy.sh
 		fi
-		wget $wopt "$@"
+		${wget[@]} ${wopt[@]} "$@"
 	fi
 }
 
@@ -53,6 +58,8 @@ for (( i = 1; i < $#; i++ )); do
 		trap 'exit 143' HUP INT QUIT PIPE TERM
 		tmpdir=$(mktemp -dt "${0##*/}.XXXXXXXX")
 		trap 'remove_tmpdir $?' EXIT
+		av0=$(readlink -ev "$0")
+		av0dir=$(dirname "$av0")
 	fi
 	url=${argv[i]}
 	out=$tmpdir/hls$i
