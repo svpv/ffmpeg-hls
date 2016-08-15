@@ -7,13 +7,24 @@ wGet()
 		out=$2
 	fi
 	wget=("$av0dir"/wget-progress "$out" wget)
-	wopt=(-nv --timeout 30 --tries 10 --retry-connrefused)
+	wopt=(-nv --timeout 20 --tries 3)
 	if !	${wget[@]} ${wopt[@]} "$@"; then
 		if [ -n "${http_proxy-}" ]; then
-			update-uk-proxy
+			update-uk-proxy --hls
 			. uk_proxy.sh
 		fi
 		${wget[@]} ${wopt[@]} "$@"
+	fi
+}
+
+wGet2()
+{
+	if !	wGet "$@"; then
+		if [ -n "${http_proxy-}" ]; then
+			until update-uk-proxy --hls --recheck; do : recheck; done
+			. uk_proxy.sh
+		fi
+		wGet "$@"
 	fi
 }
 
@@ -87,7 +98,7 @@ for (( i = 1; i < $#; i++ )); do
 			}
 			' "${url%/*}" <"$out" >$tmpdir/parts$i
 		perl -pe 's,^http://.*/,,' "$out" >new.m3u
-		wGet --continue --input-file=$tmpdir/parts$i
+		wGet2 --continue --input-file=$tmpdir/parts$i
 		argv[i]=$PWD/new.m3u
 		popd
 	fi
