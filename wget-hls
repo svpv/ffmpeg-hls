@@ -1,5 +1,27 @@
 #!/bin/bash -efux
 
+Proxied()
+{
+	if !	"$@"; then
+		if [ -n "${http_proxy-}" ]; then
+			update-uk-proxy --hls
+			. uk_proxy.sh
+		fi
+		"$@"
+	fi
+}
+
+Proxied2()
+{
+	if !	Proxied "$@"; then
+		if [ -n "${http_proxy-}" ]; then
+			until update-uk-proxy --hls --recheck; do : recheck; done
+			. uk_proxy.sh
+		fi
+		Proxied "$@"
+	fi
+}
+
 wGet()
 {
 	local out=.
@@ -8,24 +30,7 @@ wGet()
 	fi
 	wget=("$av0dir"/wget-progress "$out" wget)
 	wopt=(-nv --timeout 20 --tries 3)
-	if !	${wget[@]} ${wopt[@]} "$@"; then
-		if [ -n "${http_proxy-}" ]; then
-			update-uk-proxy --hls
-			. uk_proxy.sh
-		fi
-		${wget[@]} ${wopt[@]} "$@"
-	fi
-}
-
-wGet2()
-{
-	if !	wGet "$@"; then
-		if [ -n "${http_proxy-}" ]; then
-			until update-uk-proxy --hls --recheck; do : recheck; done
-			. uk_proxy.sh
-		fi
-		wGet "$@"
-	fi
+	Proxied "${wget[@]}" "${wopt[@]}" "$@"
 }
 
 DoubleCheck()
@@ -91,7 +96,8 @@ wGetHLS()
 			}
 			' "${url%/*}" <"$m3u" >$tmpdir/parts
 		perl -pe 's,^http://.*/,,' "$m3u" >new.m3u
-		wGet2 --continue --input-file=$tmpdir/parts
+		Proxied2 "$av0dir"/wget-progress . \
+			"$av0dir"/wget-parts $tmpdir/parts
 		OUT=$PWD/new.m3u
 		popd
 	else
