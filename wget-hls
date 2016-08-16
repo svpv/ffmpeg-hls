@@ -1,4 +1,4 @@
-#!/bin/bash -efux
+#!/bin/bash -efu
 
 Proxied()
 {
@@ -29,7 +29,7 @@ wGet()
 		out=$2
 	fi
 	wget=("$av0dir"/wget-progress "$out" wget)
-	wopt=(-nv --timeout 20 --tries 3)
+	wopt=(--quiet --timeout 20 --tries 3)
 	Proxied "${wget[@]}" "${wopt[@]}" "$@"
 }
 
@@ -79,8 +79,8 @@ wGetHLS()
 		DoubleCheck "$url" "$m3u"
 		hlsdir=$(sha1sum <"$m3u")
 		hlsdir=${TMPDIR:-/tmp}/hls-${hlsdir:0:20}
-		mkdir -pv "$hlsdir"
-		pushd "$hlsdir"
+		mkdir -p "$hlsdir"
+		pushd "$hlsdir" >/dev/null
 		perl -lne '
 			use v5.12;
 			our $base;
@@ -104,7 +104,7 @@ wGetHLS()
 			 "$av0dir"/wget-parts $tmpdir/parts2
 		wait $!
 		OUT=$PWD/new.m3u
-		popd
+		popd >/dev/null
 	else
 		# downloaded something else, will return it within tmpdir
 		OUT=$m3u
