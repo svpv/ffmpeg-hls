@@ -14,12 +14,28 @@ for (( i = 1; i < $#; i++ )); do
 	hlsdirs+=("${argv[i]%/*}")
 done
 
+ffmpeg=ffmpeg
+
+if [ "${0##*/}" = ffmpeg ]; then
+	while read -r ffmpeg; do
+		if [ "$ffmpeg" = "$0" ]; then
+			ffmpeg=
+		else
+			break
+		fi
+	done < <(type -aP ffmpeg)
+	if [ -z "$ffmpeg" ]; then
+		echo >&2 "$0: cannot find ffmpeg binary"
+		false
+	fi
+fi
+
 if [ "$*" = "${argv[*]-}" ]; then
-	exec ffmpeg "$@"
+	exec "$ffmpeg" "$@"
 fi
 
 rc=
-ffmpeg "${argv[@]}" || rc=$?
+"$ffmpeg" "${argv[@]}" || rc=$?
 
 [ -n "$rc" ] ||
 rm -r "${hlsdirs[@]}"
