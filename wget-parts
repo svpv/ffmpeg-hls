@@ -1,0 +1,28 @@
+#!/usr/bin/perl
+use v5.12;
+
+use LWP::Simple qw($ua);
+$ua->conn_cache({});
+$ua->timeout(30);
+
+my $rc;
+
+while (<>) {
+	chomp;
+	unless (m#^\w+://.+/([^\s/]+)\z#) {
+		$rc = 1, warn "bad part: $_";
+		next;
+	}
+	my $fname = $1;
+	next if -s $fname;
+	my $r = $ua->get($_, ":content_file" => "$fname$$");
+	if ($r->is_success) {
+		rename "$fname$$", $fname or
+		$rc = 1, warn "rename failed";
+	}
+	else {
+		$rc = 1, warn "get failed: $fname";
+	}
+}
+
+exit $rc;
