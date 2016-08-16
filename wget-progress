@@ -15,6 +15,8 @@ if (defined $files_from) {
 	open my $fh, "<", $files_from or die "cannot open $files_from";
 	@todu = <$fh>;
 	chomp @todu;
+	# handle urls here
+	s#^\w+://.+/## for @todu;
 }
 else {
 	@todu = shift;

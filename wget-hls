@@ -96,8 +96,13 @@ wGetHLS()
 			}
 			' "${url%/*}" <"$m3u" >$tmpdir/parts
 		perl -pe 's,^http://.*/,,' "$m3u" >new.m3u
-		Proxied2 "$av0dir"/wget-progress . \
-			"$av0dir"/wget-parts $tmpdir/parts
+		perl -ne 'print if $. % 2 == 1' $tmpdir/parts >$tmpdir/parts1
+		perl -ne 'print if $. % 2 == 0' $tmpdir/parts >$tmpdir/parts2
+		Proxied2 "$av0dir"/wget-progress --files-from=$tmpdir/parts1 \
+			 "$av0dir"/wget-parts $tmpdir/parts1 &
+		Proxied2 "$av0dir"/wget-progress --files-from=$tmpdir/parts2 \
+			 "$av0dir"/wget-parts $tmpdir/parts2
+		wait $!
 		OUT=$PWD/new.m3u
 		popd
 	else
