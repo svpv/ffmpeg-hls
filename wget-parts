@@ -5,6 +5,18 @@ use LWP::Simple qw($ua);
 $ua->conn_cache({});
 $ua->timeout(30);
 
+sub resume ($) {
+	my $url = shift;
+	my $size = -s ".part$$";
+	return unless $size >= 8192;
+	open my $fh, ">>", ".part$$" or return;
+	binmode $fh;
+	my $r = $ua->get($url,
+		Range => "bytes=$size-",
+		":content_cb" => sub { print $fh $_[0] });
+	return $r->code == 206;
+}
+
 my $rc;
 
 while (<>) {
@@ -13,14 +25,15 @@ while (<>) {
 		$rc = 1, warn "bad part: $_";
 		next;
 	}
-	my $fname = $1;
+	my ($url, $fname) = ($_, $1);
 	next if -s $fname;
-	my $r = $ua->get($_, ":content_file" => "$fname$$");
-	if ($r->is_success) {
-		rename "$fname$$", $fname or
+	my $r = $ua->get($url, ":content_file" => ".part$$");
+	if ($r->is_success or resume $url) {
+		rename ".part$$", $fname or
 		$rc = 1, warn "rename failed";
 	}
 	else {
+		unlink ".part$$";
 		$rc = 1, warn "get failed: $fname";
 	}
 }
