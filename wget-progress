@@ -6,29 +6,38 @@ GetOptions
 	"timeout0=i" => \(my $Timeout0 = 30),
 	"timeout1=i" => \(my $Timeout1 = 20),
 	"progress0=i" => \(my $Progress0 = 1<<19),
-	"progress1=i" => \(my $Progress1 = 1<<20)
+	"progress1=i" => \(my $Progress1 = 1<<20),
+	"files-from=s" => \my $files_from
 		or die "getopt failed";
 
-sub du ($) {
-	my $arg = shift;
-	if (opendir my $fh, $arg) {
-		my $size;
-		local $_;
-		while (readdir $fh) {
-			next unless -f "$arg/$_";
-			$size += -s _;
-		}
-		return $size;
-	}
-	elsif (-f $arg) {
-		return -s _;
-	}
-	# not yet created?
-	return undef;
+my @todu;
+if (defined $files_from) {
+	open my $fh, "<", $files_from or die "cannot open $files_from";
+	@todu = <$fh>;
+	chomp @todu;
+}
+else {
+	@todu = shift;
 }
 
-my $ARG = shift;
-my $this = du $ARG;
+sub du () {
+	my $size;
+	for my $arg (@todu) {
+		if (opendir my $fh, $arg) {
+			local $_;
+			while (readdir $fh) {
+				next unless -f "$arg/$_";
+				$size += -s _;
+			}
+		}
+		elsif (-f $arg) {
+			$size += -s _;
+		}
+	}
+	return $size;
+}
+
+my $this = du;
 my $next = $this + $Progress0;
 
 my $pid = fork // die "fork failed";
@@ -38,7 +47,7 @@ if ($pid == 0) {
 }
 
 $SIG{ALRM} = sub {
-	$this = du $ARG;
+	$this = du;
 	if ($this < $next) {
 		warn "killing $ARGV[0]";
 		kill TERM => $pid;
