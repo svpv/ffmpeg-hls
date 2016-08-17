@@ -35,9 +35,11 @@ if [ "$*" = "${argv[*]-}" ]; then
 fi
 
 rc=
-"$ffmpeg" "${argv[@]}" || rc=$?
-
-[ -n "$rc" ] ||
-rm -r "${hlsdirs[@]}"
+if "$ffmpeg" "${argv[@]}"; then
+	rm -r "${hlsdirs[@]}"
+else
+	rc=$?
+	echo >&2 "$0: ffmpeg failed, keeping ${hlsdirs[*]}"
+fi
 
 exit $rc
