@@ -1,32 +1,16 @@
 #!/bin/bash -efu
 
-Proxied()
-{
-	if !	"$@"; then
-		if [ -n "${http_proxy-}" ]; then
-			update-uk-proxy --hls
-			. uk_proxy.sh
-		fi
-		"$@"
-	fi
-}
-
-Proxied2()
-{
-	if !	Proxied "$@"; then
-		if [ -n "${http_proxy-}" ]; then
-			until update-uk-proxy --hls --recheck; do : recheck; done
-			. uk_proxy.sh
-		fi
-		Proxied "$@"
-	fi
-}
-
 wGetO()
 {
 	wget=("$av0dir"/wget-progress "$1" wget)
 	wopt=(--quiet --timeout 20 --tries 3)
-	Proxied "${wget[@]}" "${wopt[@]}" -O "$@"
+	if !	"${wget[@]}" "${wopt[@]}" -O "$@"; then
+		if [ -n "${http_proxy-}" ]; then
+			update-uk-proxy --hls
+			. uk_proxy.sh
+		fi
+		"${wget[@]}" "${wopt[@]}" -O "$@"
+	fi
 }
 
 DoubleCheck()
@@ -65,6 +49,94 @@ trap 'remove_tmpdir $?' EXIT
 av0=$(readlink -ev "$0")
 av0dir=$(dirname "$av0")
 
+wGetStats()
+{
+	local n
+	n=$(wc -l <$tmpdir/parts)
+	set +f
+	while :; do
+		set -- *
+		if [ "$*" = "*" ]; then
+			set --
+		fi
+		printf '\r%s %*d/%d ' "${PWD##*/}" ${#n} $# $n
+		sleep 1
+	done
+}
+
+UpdateProxyArgs()
+{
+	local p=$1 loop=$2; shift 2
+	local para=("$@")
+	file= args=()
+	local q f
+	for q in "${para[@]}"; do
+		f=uk_proxy$q.sh
+		if [ "$p" = "$q" ]; then
+			file=$f
+			args+=(--file=$f)
+			$loop
+		else
+			args+=(--not-file=$f)
+		fi
+	done
+}
+
+UpdateKidProxy()
+{
+	if [ -n "${http_proxy-}" ]; then
+		local file args
+		UpdateProxyArgs "$@"
+		args+=(--hls --recheck --self-lock)
+		until update-uk-proxy "${args[@]}"; do : recheck; done
+		. "$file"
+	fi
+}
+
+wGetKid()
+{
+	local p="$1"; shift
+	local para=("$@")
+	UpdateKidProxy "$p" "break" "${para[@]}" </dev/null
+	if ! "$av0dir"/wget-parts; then
+		while :; do
+			UpdateKidProxy "$p" ":" "${para[@]}" </dev/null
+			if "$av0dir"/wget-parts; then
+				break
+			fi
+		done
+		# this kid reads from stdin and cannot succeed
+		false
+	fi <&0 &
+}
+
+wGetParts()
+{
+	local statpid
+	wGetStats & statpid=$!
+	local try rc
+	for try in {1..3}; do
+		local para=({1..2})
+		para[0]=
+		local p pids=()
+		for p in "${para[@]}"; do
+			wGetKid "$p" "${para[@]}"
+			pids+=($!)
+		done <$tmpdir/parts
+		rc=0
+		local pid
+		for pid in ${pids[@]}; do
+			wait $pid || rc=$?
+		done
+		if [ $rc = 0 ]; then
+			break
+		fi
+	done
+	kill $statpid
+	wait
+	return $rc
+}
+
 OUT=
 hlsdir=
 
@@ -93,15 +165,9 @@ wGetHLS()
 				say "$base/$_";
 			}
 			' "${url%/*}" <"$m3u" >$tmpdir/parts
-		perl -pe 's,^http://.*/,,' "$m3u" >new.m3u
-		perl -ne 'print if $. % 2 == 1' $tmpdir/parts >$tmpdir/parts1
-		perl -ne 'print if $. % 2 == 0' $tmpdir/parts >$tmpdir/parts2
-		Proxied2 "$av0dir"/wget-progress --files-from=$tmpdir/parts1 \
-			 "$av0dir"/wget-parts $tmpdir/parts1 &
-		Proxied2 "$av0dir"/wget-progress --files-from=$tmpdir/parts2 \
-			 "$av0dir"/wget-parts $tmpdir/parts2
-		wait $!
-		OUT=$PWD/new.m3u
+		perl -pe 's,^http://.*/,,' "$m3u" >.m3u
+		wGetParts
+		OUT=$PWD/.m3u
 		popd >/dev/null
 	else
 		# downloaded something else, will return it within tmpdir
