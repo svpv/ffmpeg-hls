@@ -22,26 +22,22 @@ Proxied2()
 	fi
 }
 
-wGet()
+wGetO()
 {
-	local out=.
-	if [ "$1" = -O ]; then
-		out=$2
-	fi
-	wget=("$av0dir"/wget-progress "$out" wget)
+	wget=("$av0dir"/wget-progress "$1" wget)
 	wopt=(--quiet --timeout 20 --tries 3)
-	Proxied "${wget[@]}" "${wopt[@]}" "$@"
+	Proxied "${wget[@]}" "${wopt[@]}" -O "$@"
 }
 
 DoubleCheck()
 {
 	local url="$1"; shift
 	set -- "$1" $tmpdir/out{1,2}
-	wGet -O "$2" "$url"
+	wGetO "$2" "$url"
 	if cmp -s "$1" "$2"; then
 		rm "$2"
 	else
-		wGet -O "$3" "$url"
+		wGetO "$3" "$url"
 		if cmp -s "$1" "$3"; then
 			rm "$2" "$3"
 		elif cmp -s "$2" "$3"; then
@@ -74,7 +70,7 @@ wGetHLS()
 {
 	url=$1
 	m3u=$tmpdir/hls.out
-	wGet -O "$m3u" "$url"
+	wGetO "$m3u" "$url"
 	if [ "$(head -c7 "$m3u")" = '#EXTM3U' ]; then
 		DoubleCheck "$url" "$m3u"
 		hlsdir=$(sha1sum <"$m3u")
