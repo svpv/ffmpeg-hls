@@ -34,6 +34,32 @@ $SIG{ALRM} = sub {
 
 alarm $Timeout;
 
+use POSIX qw(sigprocmask SIG_BLOCK SIG_SETMASK);
+my $sigset_old = POSIX::SigSet->new;
+my $sigset_all = POSIX::SigSet->new;
+$sigset_all->fillset;
+
+sub readLine () {
+	use Fcntl qw(LOCK_EX LOCK_UN);
+	# STDIN cannot be locked with flock(2) in this way
+	open my $dirfd, "<", "." or die;
+	flock $dirfd, LOCK_EX or die "flock: $!";
+	defined sigprocmask SIG_BLOCK, $sigset_all, $sigset_old
+		or die "sigprocmask: $!";
+	undef $_;
+	while (sysread STDIN, my $c, 1) {
+		if ($c eq "\n") {
+			last if defined;
+		}
+		else {
+			$_ .= $c;
+		}
+	}
+	sigprocmask SIG_SETMASK, $sigset_old;
+	flock STDIN, LOCK_UN;
+	return length > 0;
+}
+
 sub resume ($) {
 	my $url = shift;
 	my $size = -s ".part$$";
@@ -48,7 +74,7 @@ sub resume ($) {
 
 my $rc;
 
-while (<>) {
+while (readLine) {
 	chomp;
 	unless (m#^\w+://.+/([^\s/]+)\z#) {
 		$rc = 1, warn "bad part: $_";
