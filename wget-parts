@@ -5,6 +5,35 @@ use LWP::Simple qw($ua);
 $ua->conn_cache({});
 $ua->timeout(30);
 
+unlink ".part$$";
+
+$SIG{HUP} =
+$SIG{INT} =
+$SIG{QUIT} =
+$SIG{PIPE} =
+$SIG{TERM} = sub {
+	unlink ".part$$";
+	exit 143; # 128 + SIGTERM
+};
+
+my $Timeout = 20;
+my $Progress = 1<<20;
+
+my $size = 0;
+my $next = $size + $Progress;
+
+$SIG{ALRM} = sub {
+	if ($size + -s ".part$$" < $next) {
+		warn "terminating";
+		unlink ".part$$";
+		exit 124; # like timeout(1)
+	}
+	$next = $size + -s _ + $Progress;
+	alarm $Timeout;
+};
+
+alarm $Timeout;
+
 sub resume ($) {
 	my $url = shift;
 	my $size = -s ".part$$";
@@ -29,6 +58,7 @@ while (<>) {
 	next if -s $fname;
 	my $r = $ua->get($url, ":content_file" => ".part$$");
 	if ($r->is_success or resume $url) {
+		$size += -s ".part$$";
 		rename ".part$$", $fname or
 		$rc = 1, warn "rename failed";
 	}
