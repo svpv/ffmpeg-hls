@@ -41,9 +41,11 @@ DoubleCheck()
 		if cmp -s "$1" "$3"; then
 			rm "$2" "$3"
 		elif cmp -s "$2" "$3"; then
+			echo >&2 "${0##*/}: fixed $1"
 			mv "$2" "$1"
 			rm "$3"
 		else
+			echo >&2 "${0##*/}: cannot fix $1"
 			rm "$1" "$2" "$3"
 			false
 		fi
@@ -109,7 +111,7 @@ wGetHLS()
 	   grep -v 'non-existing SPS 0 referenced in buffering period
 Application provided invalid, non.monotonically increasing dts to muxer
 Last message repeated'; then
-		: need recheck
+		echo >&2 "${0##*/}: rechecking"
 	else
 		return 0
 	fi
