@@ -19,16 +19,16 @@ $SIG{TERM} = sub {
 my $Timeout = 20;
 my $Progress = 1<<20;
 
-my $size = 0;
-my $next = $size + $Progress;
+my $Size = 0;
+my $Next = $Size + $Progress;
 
 $SIG{ALRM} = sub {
-	if ($size + -s ".part$$" < $next) {
+	if ($Size + -s ".part$$" < $Next) {
 		warn "terminating";
 		unlink ".part$$";
 		exit 124; # like timeout(1)
 	}
-	$next = $size + -s _ + $Progress;
+	$Next = $Size + -s _ + $Progress;
 	alarm $Timeout;
 };
 
@@ -84,7 +84,7 @@ while (readLine) {
 	next if -s $fname;
 	my $r = $ua->get($url, ":content_file" => ".part$$");
 	if ($r->is_success or resume $url) {
-		$size += -s ".part$$";
+		$Size += -s ".part$$";
 		rename ".part$$", $fname or
 		$rc = 1, warn "rename failed";
 	}
