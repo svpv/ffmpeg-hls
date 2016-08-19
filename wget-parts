@@ -60,38 +60,81 @@ sub readLine () {
 	return length > 0;
 }
 
-sub resume ($) {
-	my $url = shift;
+my $rc;
+
+sub download_chunk ($$) {
+	my ($url, $fname) = @_;
+	my $right_size;
+	$ua->add_handler(response_header => sub {
+		my $r = shift;
+		$right_size = $r->content_length if $r->code == 200;
+	});
+	my $r = $ua->get($url, ":content_file" => ".part$$");
+	$ua->remove_handler("response_header");
+	if ($r->code == 200) {
+		return 1 unless defined $right_size;
+		return 1 if $right_size == -s ".part$$";
+		warn "$fname: wrong size";
+		$rc ||= 1;
+		return;
+	}
+	elsif ($r->is_success) {
+		warn "$fname: ", $r->status_line;
+		$rc ||= 1;
+		return;
+	}
+	elsif ($r->code == 404) {
+		warn "$fname: ", $r->status_line;
+		$rc = 4;
+		return;
+	}
 	my $size = -s ".part$$";
-	return unless $size >= 8192;
-	open my $fh, ">>", ".part$$" or return;
+	if ($size < 8192 or not defined $right_size) {
+		warn "$fname: ", $r->status_line;
+		$rc ||= 1;
+		return:
+	}
+	warn "$fname: resuming (got $size bytes)";
+	open my $fh, ">>", ".part$$" or die "$fname: $!";
 	binmode $fh;
 	my $r = $ua->get($url,
 		Range => "bytes=$size-",
-		":content_cb" => sub { print $fh $_[0] });
-	return $r->code == 206;
+		":content_cb" => sub { print $fh $_[0] or die "$fname: $!" });
+	close $fh or die "$fname: $!";
+	if ($r->code == 206) {
+		return 1 if $right_size == -s ".part$$";
+		warn "$fname: wrong size after resume";
+		$rc ||= 1;
+		return;
+	}
+	warn "$fname: resume failed: ", $r->status_line;
+	$rc ||= 1;
+	return;
 }
 
-my $rc;
+my $err;
 
 while (readLine) {
 	chomp;
 	unless (m#^\w+://.+/([^\s/]+)\z#) {
-		$rc = 1, warn "bad part: $_";
+		$rc ||= 1;
+		warn "bad part: $_";
+		last if ++$err >= 4;
 		next;
 	}
 	my ($url, $fname) = ($_, $1);
 	next if -s $fname;
 	my $r = $ua->get($url, ":content_file" => ".part$$");
-	if ($r->is_success or resume $url) {
+	if (download_chunk $url, $fname) {
 		$Size += -s ".part$$";
-		rename ".part$$", $fname or
-		$rc = 1, warn "rename failed";
+		rename ".part$$", $fname or die "$fname: $!";
 	}
 	else {
 		unlink ".part$$";
-		$rc = 1, warn "get failed: $fname";
+		last if ++$err >= 4;
 	}
+	# 404, won't be able to assemble
+	last if $rc == 4;
 }
 
 exit $rc;
