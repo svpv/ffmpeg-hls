@@ -139,6 +139,7 @@ wGetParts()
 
 OUT=
 hlsdir=
+ffmpeg=(nice -5 ffmpeg)
 
 wGetHLS()
 {
@@ -172,7 +173,7 @@ wGetHLS()
 		# downloaded something else, will return it within tmpdir
 		OUT=$m3u
 	fi
-	if ffmpeg -v error -i "$OUT" -f null - 2>&1 |
+	if "${ffmpeg[@]}" -v error -i "$OUT" -f null - 2>&1 |
 	   grep -v 'non-existing SPS 0 referenced in buffering period
 Application provided invalid, non.monotonically increasing dts to muxer
 Last message repeated'; then
@@ -188,7 +189,7 @@ Last message repeated'; then
 				echo >&2 "${0##*/}: missing $f (cannot happen)"
 				false
 			fi
-			ffmpeg -v error -i "$f" -f null - 2>&1 </dev/null |
+			"${ffmpeg[@]}" -v error -i "$f" -f null - 2>&1 </dev/null |
 				stdbuf -oL sed "s|\t| |g;s|^|$part\t|" &
 			(( ++n < 2 )) || wait -n
 		done <$tmpdir/parts >$tmpdir/parts.all-errors
