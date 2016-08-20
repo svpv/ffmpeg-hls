@@ -2,7 +2,7 @@
 use v5.12;
 
 use LWP::Simple qw($ua);
-$ua->conn_cache({});
+$ua->conn_cache({ total_capacity => 2 });
 $ua->timeout(30);
 
 unlink ".part$$";
