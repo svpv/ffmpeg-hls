@@ -150,7 +150,7 @@ wGetHLS()
 		hlsdir=$(sha1sum <"$m3u")
 		hlsdir=${TMPDIR:-/tmp}/hls-${hlsdir:0:20}
 		mkdir -p "$hlsdir"
-		pushd "$hlsdir" >/dev/null
+		cd "$hlsdir"
 		perl -lne '
 			use v5.12;
 			our $base;
@@ -168,7 +168,6 @@ wGetHLS()
 		perl -pe 's,^http://.*/,,' "$m3u" >.m3u
 		wGetParts
 		OUT=$PWD/.m3u
-		popd >/dev/null
 	else
 		# downloaded something else, will return it within tmpdir
 		OUT=$m3u
@@ -182,25 +181,29 @@ Last message repeated'; then
 		return 0
 	fi
 	if [ "$(head -c7 "$m3u")" = '#EXTM3U' ]; then
+		local n=0
 		while read -r part; do
-			b=${part##*/}
-			f=$hlsdir/$b
-			[ -f "$f" ]
+			f=${part##*/}
+			if ! [ -s "$f" ]; then
+				echo >&2 "${0##*/}: missing $f (cannot happen)"
+				false
+			fi
 			ffmpeg -v error -i "$f" -f null - 2>&1 </dev/null |
-				awk -v part="$part" '{print part"\t"$0}'
-		done <$tmpdir/parts |
-			perl -pe 's/ @ 0x[0-9a-f]+\]/]/' |
-			sort -t$'\t' -u -k2,2 -k1,1 >$tmpdir/parts.all-errors
-		n=$(wc -l <$tmpdir/parts)
+				stdbuf -oL sed "s|\t| |g;s|^|$part\t|" &
+			(( ++n < 2 )) || wait -n
+		done <$tmpdir/parts >$tmpdir/parts.all-errors
+		wait
+		# if some error is encountered in more than half of the parts,
+		# it's not a real error
+		perl -pi -e 's/ @ 0x[0-9a-f]+\]/]/' $tmpdir/parts.all-errors
+		sort -t$'\t' -u -k2,2 -k1,1 -o $tmpdir/parts.all-errors{,}
 		cut -f2 $tmpdir/parts.all-errors |uniq -c |
-			awk -v n="$n" '($1<n/2){sub(" +[0-9]+ ","");print}' |
+			awk -v n=$n '(n==1||$1<=n/2){sub(" +[0-9]+ ","");print}' |
 			sort -u >$tmpdir/parts.real-errors
 		join -t$'\t' -12 -21 -o 1.1 $tmpdir/parts.{all,real}-errors >$tmpdir/parts.ck
 		sort -u -o $tmpdir/parts.ck{,}
 		while read -r part; do
-			b=${part##*/}
-			f=$hlsdir/$b
-			[ -f "$f" ]
+			f=${part##*/}
 			DoubleCheck "$part" "$f" </dev/null
 		done <$tmpdir/parts.ck
 	else
