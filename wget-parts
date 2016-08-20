@@ -7,15 +7,6 @@ $ua->timeout(30);
 
 unlink ".part$$";
 
-$SIG{HUP} =
-$SIG{INT} =
-$SIG{QUIT} =
-$SIG{PIPE} =
-$SIG{TERM} = sub {
-	unlink ".part$$";
-	exit 143; # 128 + SIGTERM
-};
-
 my $Timeout = 20;
 my $Progress = 1<<20;
 
