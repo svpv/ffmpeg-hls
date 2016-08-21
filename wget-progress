@@ -6,7 +6,8 @@ GetOptions
 	"timeout0=i" => \(my $Timeout0 = 30),
 	"timeout1=i" => \(my $Timeout1 = 20),
 	"progress0=i" => \(my $Progress0 = 1<<19),
-	"progress1=i" => \(my $Progress1 = 1<<20)
+	"progress1=i" => \(my $Progress1 = 1<<20),
+	"kill-after|k=i" => \(my $kill_after = 3)
 		or die "getopt failed";
 
 my $todu = shift;
@@ -23,11 +24,18 @@ if ($pid == 0) {
 $SIG{ALRM} = sub {
 	$this = -s $todu;
 	if ($this < $next) {
-		warn "killing $ARGV[0]";
+		warn "termnating $ARGV[0]";
 		kill TERM => $pid;
+		$SIG{ALRM} = sub {
+			warn "killing $ARGV[0]";
+			kill KILL => $pid;
+		};
+		alarm $kill_after;
 	}
-	$next = $this + $Progress1;
-	alarm $Timeout1;
+	else {
+		$next = $this + $Progress1;
+		alarm $Timeout1;
+	}
 };
 
 alarm $Timeout0;
