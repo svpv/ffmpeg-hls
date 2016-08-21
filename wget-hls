@@ -98,11 +98,17 @@ wGetKid()
 	local p="$1"; shift
 	local para=("$@")
 	UpdateKidProxy "$p" "break" "${para[@]}" </dev/null
-	if ! "$av0dir"/wget-parts; then
+	if "$av0dir"/wget-parts; then
+		: good
+	elif [ $? = 4 ]; then
+		exit 4
+	else
 		while :; do
 			UpdateKidProxy "$p" ":" "${para[@]}" </dev/null
 			if "$av0dir"/wget-parts; then
 				break
+			elif [ $? = 4 ]; then
+				exit 4
 			fi
 		done
 		# this kid reads from stdin and cannot succeed
@@ -123,12 +129,16 @@ wGetParts()
 			wGetKid "$p" "${para[@]}"
 			pids+=($!)
 		done <$tmpdir/parts
-		rc=0
+		rc=
 		local pid
 		for pid in ${pids[@]}; do
-			wait $pid || rc=$?
+			wait $pid ||
+			case $? in
+				4) rc=4 ;;
+				*) : ${rc:=1} ;;
+			esac
 		done
-		if [ $rc = 0 ]; then
+		if [[ -z $rc || $rc = 4 && $try -gt 1 ]]; then
 			break
 		fi
 	done

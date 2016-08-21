@@ -1,6 +1,9 @@
 #!/usr/bin/perl
 use v5.12;
 
+# when dying, exit with 2
+$SIG{__DIE__} = sub { $! = 2 };
+
 use LWP::Simple qw($ua);
 $ua->conn_cache({ total_capacity => 2 });
 $ua->timeout(30);
