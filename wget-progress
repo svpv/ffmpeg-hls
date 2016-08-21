@@ -6,40 +6,12 @@ GetOptions
 	"timeout0=i" => \(my $Timeout0 = 30),
 	"timeout1=i" => \(my $Timeout1 = 20),
 	"progress0=i" => \(my $Progress0 = 1<<19),
-	"progress1=i" => \(my $Progress1 = 1<<20),
-	"files-from=s" => \my $files_from
+	"progress1=i" => \(my $Progress1 = 1<<20)
 		or die "getopt failed";
 
-my @todu;
-if (defined $files_from) {
-	open my $fh, "<", $files_from or die "cannot open $files_from";
-	@todu = <$fh>;
-	chomp @todu;
-	# handle urls here
-	s#^\w+://.+/## for @todu;
-}
-else {
-	@todu = shift;
-}
+my $todu = shift;
 
-sub du () {
-	my $size;
-	for my $arg (@todu) {
-		if (opendir my $fh, $arg) {
-			local $_;
-			while (readdir $fh) {
-				next unless -f "$arg/$_";
-				$size += -s _;
-			}
-		}
-		elsif (-f $arg) {
-			$size += -s _;
-		}
-	}
-	return $size;
-}
-
-my $this = du;
+my $this = -s $todu;
 my $next = $this + $Progress0;
 
 my $pid = fork // die "fork failed";
@@ -49,7 +21,7 @@ if ($pid == 0) {
 }
 
 $SIG{ALRM} = sub {
-	$this = du;
+	$this = -s $todu;
 	if ($this < $next) {
 		warn "killing $ARGV[0]";
 		kill TERM => $pid;
