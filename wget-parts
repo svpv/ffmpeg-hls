@@ -119,6 +119,7 @@ while (readLine) {
 	if (download_chunk $url, $fname) {
 		$Size += -s ".part$$";
 		rename ".part$$", $fname or die "$fname: $!";
+		undef $err;
 	}
 	else {
 		unlink ".part$$";
