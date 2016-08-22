@@ -3,13 +3,16 @@
 wGetO()
 {
 	wget=("$av0dir"/wget-progress "$1" wget)
-	wopt=(--quiet --timeout 20 --tries 3)
-	if !	"${wget[@]}" "${wopt[@]}" -O "$@"; then
+	wopt=(--timeout 20 --tries 3)
+	if ! "${wget[@]}" "${wopt[@]}" -q -O "$@"; then
 		if [ -n "${http_proxy-}" ]; then
 			update-uk-proxy --hls
 			. uk_proxy.sh
 		fi
-		"${wget[@]}" "${wopt[@]}" -O "$@"
+		if ! "${wget[@]}" "${wopt[@]}" -nv -O "$@" &>$tmpdir/werr; then
+			cat >&2 $tmpdir/werr
+			return 1
+		fi
 	fi
 }
 
