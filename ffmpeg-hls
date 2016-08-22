@@ -11,6 +11,7 @@ for (( i = 1; i < $#; i++ )); do
 		av0dir=$(dirname "$av0")
 	fi
 	argv[i]=$("$av0dir"/wget-hls "${argv[i]}")
+	argv[i]=${argv[i]#* }
 	hlsdirs+=("${argv[i]%/*}")
 done
 

@@ -151,6 +151,7 @@ wGetParts()
 }
 
 OUT=
+time=
 hlsdir=
 ffmpeg=(nice -5 ffmpeg)
 
@@ -186,10 +187,18 @@ wGetHLS()
 		# downloaded something else, will return it within tmpdir
 		OUT=$m3u
 	fi
-	if "${ffmpeg[@]}" -v error -i "$OUT" -f null - 2>&1 |
-	   grep -v 'non-existing SPS 0 referenced in buffering period
+	if ! "${ffmpeg[@]}" -v error -stats -i "$OUT" -f null - &>$tmpdir/fferr; then
+		# too bad, ffmpeg fails even without -xerror
+		cat >&2 $tmpdir/fferr
+		echo >&2 "${0##*/}: cannot proceed"
+		false
+	fi
+	sed -i 's/\r/\n/g' $tmpdir/fferr
+	time=$(sed -n '$s/^frame=.* time=\([^ ]\+\) .*/\1/p' $tmpdir/fferr)
+	sed -i '/^frame=.* time=/d' $tmpdir/fferr
+	if grep -q -v 'non-existing SPS 0 referenced in buffering period
 Application provided invalid, non.monotonically increasing dts to muxer
-Last message repeated'; then
+Last message repeated' $tmpdir/fferr; then
 		echo >&2 "${0##*/}: rechecking"
 	else
 		return 0
@@ -223,9 +232,17 @@ Last message repeated'; then
 	else
 		DoubleCheck "$url" "$m3u"
 	fi
+	if ! "${ffmpeg[@]}" -xerror -v error -stats -i "$OUT" -f null - &>$tmpdir/fferr; then
+		# stream still corrupted
+		cat >&2 $tmpdir/fferr
+		echo >&2 "${0##*/}: cannot proceed"
+		false
+	fi
+	sed -i 's/\r/\n/g' $tmpdir/fferr
+	time=$(sed -n '$s/^frame=.* time=\([^ ]\+\) .*/\1/p' $tmpdir/fferr)
 }
 
 wGetHLS "${1:?}" >&2
 # returning something within tmpdir?
 [ -n "$hlsdir" ] || trap - EXIT
-echo "${OUT:?}"
+echo "${time:-N/A}" "${OUT:?}"
