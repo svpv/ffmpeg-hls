@@ -187,22 +187,26 @@ wGetHLS()
 		# downloaded something else, will return it within tmpdir
 		OUT=$m3u
 	fi
-	if ! "${ffmpeg[@]}" -v error -stats -i "$OUT" -f null - &>$tmpdir/fferr; then
-		# too bad, ffmpeg fails even without -xerror
-		cat >&2 $tmpdir/fferr
-		echo >&2 "${0##*/}: cannot proceed"
-		false
-	fi
+	rc=
+	"${ffmpeg[@]}" -v error -stats -i "$OUT" -f null - &>$tmpdir/fferr || rc=$?
 	sed -i 's/\r/\n/g' $tmpdir/fferr
 	time=$(sed -n '$s/^frame=.* time=\([^ ]\+\) .*/\1/p' $tmpdir/fferr)
 	sed -i '/^frame=.* time=/d' $tmpdir/fferr
-	if grep -q -v 'non-existing SPS 0 referenced in buffering period
+	tolera='non-existing SPS 0 referenced in buffering period
+SPS unavailable in decode_picture_timing
 Application provided invalid, non.monotonically increasing dts to muxer
-Last message repeated' $tmpdir/fferr; then
+Last message repeated'
+	if grep -q -v "$tolera" $tmpdir/fferr; then
 		echo >&2 "${0##*/}: rechecking"
+	elif [ -n "$rc" ]; then
+		# too bad, ffmpeg fails even without -xerror,
+		# and we don't have any errors to recheck
+		cat $tmpdir/fferr
+		echo "${0##*/}: cannot proceed"
+		return 1
 	else
 		return 0
-	fi
+	fi >&2
 	if [ "$(head -c7 "$m3u")" = '#EXTM3U' ]; then
 		local n=0
 		while read -r part; do
@@ -232,14 +236,20 @@ Last message repeated' $tmpdir/fferr; then
 	else
 		DoubleCheck "$url" "$m3u"
 	fi
-	if ! "${ffmpeg[@]}" -xerror -v error -stats -i "$OUT" -f null - &>$tmpdir/fferr; then
-		# stream still corrupted
-		cat >&2 $tmpdir/fferr
-		echo >&2 "${0##*/}: cannot proceed"
-		false
-	fi
+	rc=
+	"${ffmpeg[@]}" -xerror -v error -stats -i "$OUT" -f null - &>$tmpdir/fferr || rc=$?
 	sed -i 's/\r/\n/g' $tmpdir/fferr
 	time=$(sed -n '$s/^frame=.* time=\([^ ]\+\) .*/\1/p' $tmpdir/fferr)
+	sed -i '/^frame=.* time=/d' $tmpdir/fferr
+	# stream still corrupted?
+	if grep -v "$tolera" $tmpdir/fferr; then
+		echo "${0##*/}: cannot proceed"
+		return 1
+	elif [ -n "$rc" ]; then
+		cat $tmpdir/fferr
+		echo "${0##*/}: cannot proceed"
+		return 1
+	fi >&2
 }
 
 wGetHLS "${1:?}" >&2
