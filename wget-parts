@@ -108,8 +108,18 @@ sub download_chunk ($$) {
 
 my $err;
 
+my $base = shift;
+
 while (readLine) {
 	chomp;
+	unless (m#^\w+://#) {
+		if ($base) {
+			$_ = "$base/$_";
+		}
+		else {
+			warn "no base for $_";
+		}
+	}
 	unless (m#^\w+://.+/([^\s/]+)\z#) {
 		$rc ||= 1;
 		warn "bad part: $_";

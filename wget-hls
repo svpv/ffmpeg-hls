@@ -98,17 +98,17 @@ UpdateKidProxy()
 
 wGetKid()
 {
-	local p="$1"; shift
+	local b="$1" p="$2"; shift 2
 	local para=("$@")
 	UpdateKidProxy "$p" "break" "${para[@]}" </dev/null
-	if "$av0dir"/wget-parts; then
+	if "$av0dir"/wget-parts "$b"; then
 		: good
 	elif [ $? = 4 ]; then
 		exit 4
 	else
 		while :; do
 			UpdateKidProxy "$p" ":" "${para[@]}" </dev/null
-			if "$av0dir"/wget-parts; then
+			if "$av0dir"/wget-parts "$b"; then
 				break
 			elif [ $? = 4 ]; then
 				exit 4
@@ -123,13 +123,21 @@ wGetParts()
 {
 	local statpid
 	wGetStats & statpid=$!
-	local try rc
+	local try rc=
+	local npara=2
 	for try in {1..3}; do
-		local para=({1..2})
-		para[0]=
+		left=$(comm -23 <(perl -pe 's#^\w+://.*/##' $tmpdir/parts |sort) <(ls) |wc -l)
+		if [ $left = 0 ]; then
+			break
+		elif [ $left -lt $npara ]; then
+			npara=$left
+		fi
+		local para=('' $(seq 2 $npara))
 		local p pids=()
 		for p in "${para[@]}"; do
-			wGetKid "$p" "${para[@]}"
+			# use either $1 or $2 as base URL
+			b=$((1+(${p:-1}-1)%2))
+			wGetKid "${!b}" "$p" "${para[@]}"
 			pids+=($!)
 		done <$tmpdir/parts
 		rc=
@@ -144,6 +152,8 @@ wGetParts()
 		if [[ -z $rc || $rc = 4 && $try -gt 1 ]]; then
 			break
 		fi
+		# rotate base URLs
+		set -- "$2" "$1"
 	done
 	kill $statpid
 	wait
@@ -157,31 +167,40 @@ ffmpeg=(nice -5 ffmpeg)
 
 wGetHLS()
 {
-	url=$1
 	m3u=$tmpdir/hls.out
-	wGetO "$m3u" "$url"
+	wGetO "$m3u" "$1"
 	if [ "$(head -c7 "$m3u")" = '#EXTM3U' ]; then
-		DoubleCheck "$url" "$m3u"
+		Clean()
+		{
+	perl -pi -le 'BEGIN{$base=shift} s/\r//g; s#^\Q$base\E/##' "${1%/*}" <"$2" >"$2"c
+		}
+		if [[ $1 == $2 ]]; then
+			DoubleCheck "$1" "$m3u"
+			Clean "$1" "$m3u"
+		else
+			n3u=$tmpdir/hls.put
+			wGetO "$n3u" "$2"
+			if ! cmp -s "$m3u" "$n3u"; then
+				DoubleCheck "$1" "$m3u"
+				DoubleCheck "$2" "$n3u"
+			fi
+			Clean "$1" "$m3u"
+			Clean "$2" "$n3u"
+			if ! cmp -s "$m3u"c "$n3u"c; then
+				echo >&2 "${0##*/}: URLs provide different playlists"
+				set -- "$1" "$1"
+			fi
+		fi
+		# always hash original m3u - segment names can be very simple,
+		# it is the directory name that makes the list of segments unique
 		hlsdir=$(sha1sum <"$m3u")
 		hlsdir=${TMPDIR:-/tmp}/hls-${hlsdir:0:20}
 		mkdir -p "$hlsdir"
 		cd "$hlsdir"
-		perl -lne '
-			use v5.12;
-			our $base;
-			BEGIN {
-				$base = shift;
-			}
-			s/\r//g;
-			if (m,^http://,) {
-				say;
-			}
-			elsif (m,^[^#],) {
-				say "$base/$_";
-			}
-			' "${url%/*}" <"$m3u" >$tmpdir/parts
-		perl -pe 's,^http://.*/,,' "$m3u" >.m3u
-		wGetParts
+		if grep '^[^#]' "$m3u"c >$tmpdir/parts; then
+			wGetParts "${1%/*}" "${2%/*}"
+		fi
+		perl -pe 's#^\w+://.*/##' "$m3u"c >.m3u
 		OUT=$PWD/.m3u
 	else
 		# downloaded something else, will return it within tmpdir
@@ -252,7 +271,7 @@ Last message repeated'
 	fi >&2
 }
 
-wGetHLS "${1:?}" >&2
+wGetHLS "${1:?}" "${2:-$1}" >&2
 # returning something within tmpdir?
 [ -n "$hlsdir" ] || trap - EXIT
 echo "${time:-N/A}" "${OUT:?}"
