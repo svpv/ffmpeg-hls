@@ -209,8 +209,8 @@ wGetHLS()
 	rc=
 	"${ffmpeg[@]}" -v error -stats -i "$OUT" -f null - &>$tmpdir/fferr || rc=$?
 	sed -i 's/\r/\n/g' $tmpdir/fferr
-	time=$(sed -n '$s/^frame=.* time=\([^ ]\+\) .*/\1/p' $tmpdir/fferr)
-	sed -i '/^frame=.* time=/d' $tmpdir/fferr
+	time=$(sed -n '$s/^\(frame\|size\)=.* time=\([^ ]\+\) .*/\2/p' $tmpdir/fferr)
+	sed -i '/^\(frame\|size\)=.* time=/d' $tmpdir/fferr
 	tolera='non-existing SPS 0 referenced in buffering period
 SPS unavailable in decode_picture_timing
 Application provided invalid, non.monotonically increasing dts to muxer
@@ -258,8 +258,8 @@ Last message repeated'
 	rc=
 	"${ffmpeg[@]}" -xerror -v error -stats -i "$OUT" -f null - &>$tmpdir/fferr || rc=$?
 	sed -i 's/\r/\n/g' $tmpdir/fferr
-	time=$(sed -n '$s/^frame=.* time=\([^ ]\+\) .*/\1/p' $tmpdir/fferr)
-	sed -i '/^frame=.* time=/d' $tmpdir/fferr
+	time=$(sed -n '$s/^\(frame\|size\)=.* time=\([^ ]\+\) .*/\2/p' $tmpdir/fferr)
+	sed -i '/^\(frame\|size\)=.* time=/d' $tmpdir/fferr
 	# stream still corrupted?
 	if grep -v "$tolera" $tmpdir/fferr; then
 		echo "${0##*/}: cannot proceed"
