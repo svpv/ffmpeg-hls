@@ -70,12 +70,13 @@ wGetStats()
 UpdateProxyArgs()
 {
 	local p=$1 loop=$2; shift 2
-	local para=("$@")
 	file= args=()
-	local q f
-	for q in "${para[@]}"; do
-		f=uk_proxy$q.sh
-		if [ "$p" = "$q" ]; then
+	local q f=uk_proxy.sh
+	for q; do
+		if [ $q -gt 1 ]; then
+			f=uk_proxy$q.sh
+		fi
+		if [ $p = $q ]; then
 			file=$f
 			args+=(--file=$f)
 			$loop
@@ -99,15 +100,14 @@ UpdateKidProxy()
 wGetKid()
 {
 	local b="$1" p="$2"; shift 2
-	local para=("$@")
-	UpdateKidProxy "$p" "break" "${para[@]}" </dev/null
+	UpdateKidProxy $p "break" "$@" </dev/null
 	if "$av0dir"/wget-parts "$b"; then
 		: good
 	elif [ $? = 4 ]; then
 		exit 4
 	else
 		while :; do
-			UpdateKidProxy "$p" ":" "${para[@]}" </dev/null
+			UpdateKidProxy $p ":" "$@" </dev/null
 			if "$av0dir"/wget-parts "$b"; then
 				break
 			elif [ $? = 4 ]; then
@@ -132,12 +132,12 @@ wGetParts()
 		elif [ $left -lt $npara ]; then
 			npara=$left
 		fi
-		local para=('' $(seq 2 $npara))
+		local para=$(seq 1 $npara)
 		local p pids=()
-		for p in "${para[@]}"; do
+		for p in $para; do
 			# use either $1 or $2 as base URL
-			b=$((1+(${p:-1}-1)%2))
-			wGetKid "${!b}" "$p" "${para[@]}"
+			b=$((1+($p-1)%2))
+			wGetKid "${!b}" $p $para
 			pids+=($!)
 		done <$tmpdir/parts
 		rc=
