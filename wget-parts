@@ -10,6 +10,18 @@ $ua->timeout(30);
 
 unlink ".part$$";
 
+$SIG{HUP} =
+$SIG{INT} =
+$SIG{QUIT} =
+$SIG{PIPE} =
+$SIG{TERM} = sub {
+	unlink ".part$$";
+	my $sig = shift;
+	delete $SIG{$sig};
+	kill $sig => $$;
+	exit 143; # cannot happen
+};
+
 my $Timeout = 20;
 my $Progress = 1<<20;
 
