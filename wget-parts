@@ -86,7 +86,7 @@ sub download_chunk ($$) {
 	if ($size < 8192 or not defined $right_size) {
 		warn "$fname: ", $r->status_line;
 		$rc ||= 1;
-		return:
+		return;
 	}
 	warn "$fname: resuming (got $size bytes)";
 	open my $fh, ">>", ".part$$" or die "$fname: $!";
