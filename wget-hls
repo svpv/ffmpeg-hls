@@ -91,32 +91,76 @@ UpdateKidProxy()
 	if [ -n "${http_proxy-}" ]; then
 		local file args
 		UpdateProxyArgs "$@"
-		args+=(--hls --recheck --self-lock)
+		args+=(--hls --recheck)
 		until update-uk-proxy "${args[@]}"; do : recheck; done
 		. "$file"
 	fi
 }
 
-wGetKid()
+KidJobs()
 {
-	local b="$1" p="$2"; shift 2
-	UpdateKidProxy $p "break" "$@" </dev/null
-	if "$av0dir"/wget-parts "$b"; then
-		: good
-	elif [ $? = 4 ]; then
-		exit 4
-	else
-		while :; do
-			UpdateKidProxy $p ":" "$@" </dev/null
-			if "$av0dir"/wget-parts "$b"; then
-				break
-			elif [ $? = 4 ]; then
-				exit 4
-			fi
+	# prints e.g. " 2 3 ", or "" for no jobs
+	jobs |sed -n '/\//{s/^\[\([0-9]\+\)\].*/\1\n/;H};$g;$s/\n\+/ /gp'
+}
+
+ParaTry()
+{
+	local b1=$1 b2=$2; shift 2
+	# launch kids
+	local p b j2p=()
+	for p; do
+		UpdateKidProxy $p "break" "$@" </dev/null
+		# use either $b1 or $b2 as base URL
+		b=b$((1+($p-1)%2))
+		"$av0dir"/wget-parts "${!b}" <&0 &
+		# wGetStats is job number 1
+		j2p[p+1]=$p
+	done
+	# wait and possibly relaunch kids
+	local j kids nowkids
+	kids=$(KidJobs)
+	while [ -n "$kids" ]; do
+		local kidrc=
+		wait -n || kidrc=$?
+		nowkids=$(KidJobs)
+		if [ -z "$kidrc" ]; then
+			kids=$nowkids
+			continue
+		fi
+		# it's an error by now - note that the kids read from stdin
+		# and cannot possibly "succeed" after restart
+		rc=1
+		# 404 Not Found aborts the try
+		if [ "$kidrc" = 4 ]; then
+			for j in $nowkids; do
+				kill %$j
+				wait %$j ||:
+			done
+			rc=4
+			return
+		fi
+		# will restart, but who exited?
+		for j in $kids; do
+			case $nowkids in
+				*" $j "*) j= ;;
+				*) break ;;
+			esac
 		done
-		# this kid reads from stdin and cannot succeed
-		false
-	fi <&0 &
+		p=${j2p[j]-}
+		if [ -z "$j" ] || [ -z "$p" ]; then
+			echo >&2 "${0##*/}: don't know who exited (cannot happen)"
+			kids=$nowkids
+			continue
+		fi
+		UpdateKidProxy $p ":" "$@" </dev/null
+		b=b$((1+($p-1)%2))
+		"$av0dir"/wget-parts "${!b}" <&0 &
+		kids=$(KidJobs)
+		unset j2p[j]
+		j=${kids% }
+		j=${kids##* }
+		j2p[j]=$p
+	done
 }
 
 wGetParts()
@@ -131,24 +175,10 @@ wGetParts()
 		elif [ $left -lt $npara ]; then
 			npara=$left
 		fi
-		local para=$(seq 1 $npara)
-		local p pids=()
-		for p in $para; do
-			# use either $1 or $2 as base URL
-			b=$((1+($p-1)%2))
-			wGetKid "${!b}" $p $para
-			pids+=($!)
-		done <$tmpdir/parts
 		rc=
-		local pid
-		for pid in ${pids[@]}; do
-			wait $pid ||
-			case $? in
-				4) rc=4 ;;
-				*) : ${rc:=1} ;;
-			esac
-		done
-		if [[ -z $rc || $rc = 4 && $try -gt 1 ]]; then
+		local para=$(seq 1 $npara)
+		ParaTry "$1" "$2" ${para:?} <$tmpdir/parts
+		if [ -z "$rc" ]; then
 			break
 		fi
 		# rotate base URLs
