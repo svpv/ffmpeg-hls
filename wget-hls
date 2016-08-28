@@ -97,6 +97,11 @@ UpdateKidProxy()
 	fi
 }
 
+EOF()
+{
+	perl -e 'exit(tell STDIN == -s STDIN ? 0 : 1)'
+}
+
 KidJobs()
 {
 	# prints e.g. " 2 3 ", or "" for no jobs
@@ -138,6 +143,11 @@ ParaTry()
 			done
 			rc=4
 			return
+		fi
+		# will not restart at EOF
+		if EOF; then
+			kids=$nowkids
+			continue
 		fi
 		# will restart, but who exited?
 		for j in $kids; do
