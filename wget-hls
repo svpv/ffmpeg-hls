@@ -292,7 +292,7 @@ Last message repeated'
 			DoubleCheck "$part" "$f" </dev/null
 		done <$tmpdir/parts.ck
 	else
-		DoubleCheck "$url" "$m3u"
+		DoubleCheck "$1" "$m3u"
 	fi
 	rc=
 	"${ffmpeg[@]}" -xerror -v error -stats -i "$OUT" -f null - &>$tmpdir/fferr || rc=$?
