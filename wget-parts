@@ -78,9 +78,8 @@ sub download_chunk ($$) {
 	my $r = $ua->get($url, ":content_file" => ".part$$");
 	$ua->remove_handler("response_header");
 	if ($r->code == 200) {
-		return 1 unless defined $right_size;
-		return 1 if $right_size == -s ".part$$";
-		warn "$fname: wrong size";
+		return 1 if -s ".part$$" and (-s _ == $right_size or not $right_size);
+		warn "$fname: " . (-s _ ? "wrong size" : "empty output");
 		$rc ||= 1;
 		return;
 	}
@@ -95,7 +94,7 @@ sub download_chunk ($$) {
 		return;
 	}
 	my $size = -s ".part$$";
-	if ($size < 8192 or not defined $right_size) {
+	if ($size < 8192 or not $right_size) {
 		warn "$fname: ", $r->status_line;
 		$rc ||= 1;
 		return;
