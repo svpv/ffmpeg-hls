@@ -62,7 +62,7 @@ sub readLine () {
 		}
 	}
 	sigprocmask SIG_SETMASK, $sigset_old;
-	flock STDIN, LOCK_UN;
+	flock $dirfd, LOCK_UN;
 	return length > 0;
 }
 
