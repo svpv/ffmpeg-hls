@@ -106,74 +106,66 @@ EOF()
 	perl -e 'exit(tell STDIN == -s STDIN ? 0 : 1)'
 }
 
-KidJobs()
-{
-	# prints e.g. " 2 3 ", or "" for no jobs
-	jobs |sed -n '/\//{s/^\[\([0-9]\+\)\].*/\1\n/;H};$g;$s/\n\+/ /gp'
-}
-
 ParaTry()
 {
 	local b1=$1 b2=$2; shift 2
 	# launch kids
-	local p b j2p=()
+	local p b pids= pid2no=()
 	for p; do
 		UpdateKidProxy $p "break" "$@" </dev/null
 		# use either $b1 or $b2 as base URL
 		b=b$((1+($p-1)%2))
 		"$av0dir"/wget-parts "${!b}" <&0 &
-		# wGetStats is job number 1
-		j2p[p+1]=$p
+		pids="$pids $! "
+		pid2no[$!]=$p
 	done
 	# wait and possibly relaunch kids
-	local j kids nowkids
-	kids=$(KidJobs)
-	while [ -n "$kids" ]; do
-		local kidrc=
-		wait -n || kidrc=$?
-		nowkids=$(KidJobs)
-		if [ -z "$kidrc" ]; then
-			kids=$nowkids
+	while [ -n "$pids" ]; do
+		local pid= pidrc=
+		wait -n || pidrc=$?
+		# find out who exited, namely its $p (parallel job no)
+		p=
+		# also make the list of pids for the next iteration
+		local lspids nextpids=
+		lspids=$(jobs -p |perl -p0e 's/^/\n/;s/$/\n/;s/\n+/ /g')
+		for pid in $pids; do
+			case $lspids in
+				*" $pid "*) nextpids="$nextpids $pid " ;;
+				*) [ -z "$p" ] && p=${pid2no[$pid]} && unset pid2no[$pid] ||
+				   echo >&2 "${0##*/}: two pids exited (cannot happen)" ;;
+			esac
+		done
+		pids=$nextpids
+		if [ -z "$p" ]; then
+			echo >&2 "${0##*/}: don't know who exited (cannot happen)"
+			continue
+		fi
+		# a kid exited successfully? no need to relaunch
+		if [ -z "$pidrc" ]; then
 			continue
 		fi
 		# it's an error by now - note that the kids read from stdin
 		# and cannot possibly "succeed" after restart
 		rc=1
 		# 404 Not Found aborts the try
-		if [ "$kidrc" = 4 ]; then
-			for j in $nowkids; do
-				kill %$j
-				wait %$j ||:
+		if [ "$pidrc" = 4 ]; then
+			for pid in $nextpids; do
+				kill $pid
+				wait $pid ||:
 			done
 			rc=4
 			return
 		fi
 		# will not restart at EOF
 		if EOF; then
-			kids=$nowkids
 			continue
 		fi
-		# will restart, but who exited?
-		for j in $kids; do
-			case $nowkids in
-				*" $j "*) j= ;;
-				*) break ;;
-			esac
-		done
-		p=${j2p[j]-}
-		if [ -z "$j" ] || [ -z "$p" ]; then
-			echo >&2 "${0##*/}: don't know who exited (cannot happen)"
-			kids=$nowkids
-			continue
-		fi
+		# relaunch the kid
 		UpdateKidProxy $p ":" "$@" </dev/null
 		b=b$((1+($p-1)%2))
 		"$av0dir"/wget-parts "${!b}" <&0 &
-		kids=$(KidJobs)
-		unset j2p[j]
-		j=${kids% }
-		j=${kids##* }
-		j2p[j]=$p
+		pids="$pids $! "
+		pid2no[$!]=$p
 	done
 }
 
