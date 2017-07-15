@@ -147,10 +147,12 @@ while (readLine) {
 	}
 	else {
 		unlink ".part$$";
-		last if ++$err >= 4;
+		$err++;
 	}
 	# 404, won't be able to assemble
 	last if $rc == 4;
+	# a few consecutive errors, need to change proxy
+	exit 3 if $err >= 4;
 }
 
 exit $rc;
