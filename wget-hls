@@ -73,8 +73,12 @@ wGetStats()
 
 UpdateProxyArgs()
 {
-	local p=$1 loop=$2; shift 2
 	file= args=()
+	if [ $1 = --force ]; then
+		args+=(--not-proxy=$http_proxy)
+		shift
+	fi
+	local p=$1 loop=$2; shift 2
 	local q f=uk_proxy.sh
 	for q; do
 		if [ $q -gt 1 ]; then
@@ -161,7 +165,11 @@ ParaTry()
 			continue
 		fi
 		# relaunch the kid
-		UpdateKidProxy $p ":" "$@" </dev/null
+		local force=
+		if [ $pidrc = 3 ]; then
+			force=--force
+		fi
+		UpdateKidProxy $force $p ":" "$@" </dev/null
 		b=b$((1+($p-1)%2))
 		"$av0dir"/wget-parts "${!b}" <&0 &
 		pids="$pids $! "
