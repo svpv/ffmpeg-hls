@@ -206,6 +206,7 @@ wGetParts()
 OUT=
 time=
 hlsdir=
+hlsdirprefix=
 ffmpeg=(nice -5 ffmpeg)
 
 wGetHLS()
@@ -237,7 +238,7 @@ wGetHLS()
 		# always hash original m3u - segment names can be very simple,
 		# it is the directory name that makes the list of segments unique
 		hlsdir=$(sha1sum <"$m3u")
-		hlsdir=${TMPDIR:-/tmp}/hls-${hlsdir:0:20}
+		hlsdir=$hlsdirprefix-${hlsdir:0:20}
 		mkdir -p "$hlsdir"
 		cd "$hlsdir"
 		if grep '^[^#]' "$m3u"c >$tmpdir/parts; then
@@ -313,6 +314,17 @@ Last message repeated'
 		return 1
 	fi >&2
 }
+
+if [[ ${1:?} = --name=* ]]; then
+	hlsdirprefix=${1#--name=}
+	shift
+fi
+
+case $hlsdirprefix in
+	*/*) ;;
+	 '') hlsdirprefix=${TMPDIR:-/tmp}/hls ;;
+	  *) hlsdirprefix=${TMPDIR:-/tmp}/hls-$hlsdirprefix ;;
+esac
 
 wGetHLS "${1:?}" "${2:-$1}" >&2
 # returning something within tmpdir?
