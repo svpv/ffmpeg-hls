@@ -5,7 +5,8 @@ hlsdirs=()
 argv=("$@")
 
 for (( i = 1; i < $#; i++ )); do
-	[[ ${argv[i-1]} = -i && ${argv[i]} = http://* ]] || continue
+	[[ ${argv[i-1]} = -i ]] &&
+	[[ ${argv[i]} = @(http|https)://*.@(m3u|m3u8)?(\?*) ]] || continue
 	if [ -z "$av0dir" ]; then
 		av0=$(readlink -ev "$0")
 		av0dir=$(dirname "$av0")
