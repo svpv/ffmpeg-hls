@@ -216,7 +216,8 @@ wGetHLS()
 	if [ "$(head -c7 "$m3u")" = '#EXTM3U' ]; then
 		Clean()
 		{
-	perl -pi -le 'BEGIN{$base=shift} s/\r//g; s#^\Q$base\E/##' "${1%/*}" <"$2" >"$2"c
+	perl -pi -le 'BEGIN{$base=shift} s/\r//g; s/^##.*/##/;
+					 s#^\Q$base\E/##' "${1%/*}" <"$2" >"$2"c
 		}
 		if [[ $1 == $2 ]]; then
 			DoubleCheck "$1" "$m3u"
