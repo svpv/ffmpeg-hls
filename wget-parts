@@ -66,6 +66,11 @@ sub readLine () {
 	return length > 0;
 }
 
+use constant {
+	tsPacketSize => 188,
+	tsSyncByte => 'G',
+};
+
 my $rc;
 
 sub download_chunk ($$) {
@@ -77,44 +82,38 @@ sub download_chunk ($$) {
 	});
 	my $r = $ua->get($url, ":content_file" => ".part$$");
 	$ua->remove_handler("response_header");
-	if ($r->code == 200) {
-		return 1 if -s ".part$$" and (-s _ == $right_size or not $right_size);
-		warn "$fname: " . (-s _ ? "wrong size" : "empty output");
+	if ($r->code != 200) {
+		warn "$fname: ", $r->status_line;
+		$rc = 4 if $r->code == 404;
 		$rc ||= 1;
 		return;
 	}
-	elsif ($r->is_success) {
-		warn "$fname: ", $r->status_line;
+	if ($right_size and $right_size < 1 or
+	    tsPacketSize and $right_size % tsPacketSize) {
+		warn "$fname: bad expected size: $right_size";
 		$rc ||= 1;
-		return;
-	}
-	elsif ($r->code == 404) {
-		warn "$fname: ", $r->status_line;
-		$rc = 4;
 		return;
 	}
 	my $size = -s ".part$$";
-	if ($size < 8192 or not $right_size) {
-		warn "$fname: ", $r->status_line;
+	if (not $size) {
+		warn "$fname: empty output";
 		$rc ||= 1;
 		return;
 	}
-	warn "$fname: resuming (got $size bytes)";
-	open my $fh, ">>", ".part$$" or die "$fname: $!";
-	binmode $fh;
-	my $r = $ua->get($url,
-		Range => "bytes=$size-",
-		":content_cb" => sub { print $fh $_[0] or die "$fname: $!" });
-	close $fh or die "$fname: $!";
-	if ($r->code == 206) {
-		return 1 if $right_size == -s ".part$$";
-		warn "$fname: wrong size after resume";
+	if ($right_size and $size != $right_size or
+	    tsPacketSize and $right_size % tsPacketSize) {
+		warn "$fname: wrong size";
 		$rc ||= 1;
 		return;
 	}
-	warn "$fname: resume failed: ", $r->status_line;
-	$rc ||= 1;
-	return;
+	open my $fh, "<", ".part$$" or die "$fname: $!";
+	read $fh, my $c, 1 or die "$fname: $!";
+	if (tsSyncByte and $c ne tsSyncByte) {
+		warn "$fname: bad sync byte";
+		$rc ||= 1;
+		return;
+	}
+	return $size;
 }
 
 my $err;
@@ -139,8 +138,8 @@ while (readLine) {
 	}
 	my ($url, $fname) = ($_, $1);
 	next if -s $fname;
-	if (download_chunk $url, $fname) {
-		$Size += -s ".part$$";
+	if (my $size = download_chunk $url, $fname) {
+		$Size += $size;
 		rename ".part$$", $fname or die "$fname: $!";
 		undef $err;
 	}
