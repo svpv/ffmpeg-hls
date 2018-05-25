@@ -209,6 +209,14 @@ hlsdir=
 hlsdirprefix=
 ffmpeg=(nice -5 ffmpeg)
 
+CleanLogTime()
+{
+	sed -i 's/\r/\n/g' "$1"
+	sed -ni '/\w/p' "$1"
+	time=$(sed -n '$s/^\(frame\|size\)=.* time=\([^ ]\+\) .*/\2/p' "$1")
+	sed -i '/^\(frame\|size\)=.* time=/d' $1
+}
+
 wGetHLS()
 {
 	m3u=$tmpdir/hls.out
@@ -253,10 +261,8 @@ wGetHLS()
 		OUT=$m3u
 	fi
 	rc=
-	"${ffmpeg[@]}" -v error -stats -i "$OUT" -f null - &>$tmpdir/fferr || rc=$?
-	sed -i 's/\r/\n/g' $tmpdir/fferr
-	time=$(sed -n '$s/^\(frame\|size\)=.* time=\([^ ]\+\) .*/\2/p' $tmpdir/fferr)
-	sed -i '/^\(frame\|size\)=.* time=/d' $tmpdir/fferr
+	"${ffmpeg[@]}" -v warning -stats -i "$OUT" -f null - &>$tmpdir/fferr || rc=$?
+	CleanLogTime $tmpdir/fferr
 	tolera='non-existing SPS 0 referenced in buffering period
 SPS unavailable in decode_picture_timing
 Application provided invalid, non.monotonically increasing dts to muxer
@@ -280,8 +286,8 @@ Last message repeated'
 				echo >&2 "${0##*/}: missing $f (cannot happen)"
 				false
 			fi
-			"${ffmpeg[@]}" -v error -i "$f" -f null - 2>&1 </dev/null |
-				stdbuf -oL sed "s|\t| |g;s|^|$part\t|" &
+			"${ffmpeg[@]}" -v warning -i "$f" -f null - 2>&1 </dev/null |
+				stdbuf -oL sed "s|\t| |g;s|^|${part//|/\\|}\t|" &
 			(( ++n < 2 )) || wait -n
 		done <$tmpdir/parts >$tmpdir/parts.all-errors
 		wait
@@ -302,10 +308,8 @@ Last message repeated'
 		DoubleCheck "$1" "$m3u"
 	fi
 	rc=
-	"${ffmpeg[@]}" -xerror -v error -stats -i "$OUT" -f null - &>$tmpdir/fferr || rc=$?
-	sed -i 's/\r/\n/g' $tmpdir/fferr
-	time=$(sed -n '$s/^\(frame\|size\)=.* time=\([^ ]\+\) .*/\2/p' $tmpdir/fferr)
-	sed -i '/^\(frame\|size\)=.* time=/d' $tmpdir/fferr
+	"${ffmpeg[@]}" -xerror -v warning -stats -i "$OUT" -f null - &>$tmpdir/fferr || rc=$?
+	CleanLogTime $tmpdir/fferr
 	# stream still corrupted?
 	if grep -v "$tolera" $tmpdir/fferr; then
 		echo "${0##*/}: cannot proceed"
@@ -331,4 +335,4 @@ esac
 wGetHLS "${1:?}" "${2:-$1}" >&2
 # returning something within tmpdir?
 [ -n "$hlsdir" ] || trap - EXIT
-echo "${time:-N/A}" "${OUT:?}"
+echo "${time:?}" "${OUT:?}"
