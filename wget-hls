@@ -246,7 +246,7 @@ wGetHLS()
 		if grep '^[^#]' "$m3u"c >$tmpdir/parts; then
 			wGetParts "${1%/*}" "${2%/*}"
 		fi
-		perl -pe 's#^\w+://.*/##' "$m3u"c >.m3u
+		perl -pe 's|^[^#].*/||' "$m3u"c >.m3u
 		OUT=$PWD/.m3u
 	else
 		# downloaded something else, will return it within tmpdir
