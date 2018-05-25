@@ -302,6 +302,7 @@ Last message repeated'
 		sort -u -o $tmpdir/parts.ck{,}
 		while read -r part; do
 			f=${part##*/}
+			[[ $part = *://* ]] || part=${1%/*}/$part
 			DoubleCheck "$part" "$f" </dev/null
 		done <$tmpdir/parts.ck
 	else
