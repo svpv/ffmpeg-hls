@@ -71,7 +71,7 @@ use constant {
 	tsSyncByte => 'G',
 };
 
-my $rc;
+my $rc; # exit status, sticky
 
 sub download_chunk ($$) {
 	my ($url, $fname) = @_;
@@ -116,7 +116,7 @@ sub download_chunk ($$) {
 	return $size;
 }
 
-my $err;
+my $err; # consecutive errors, not sticky
 
 my $base = shift;
 
@@ -131,10 +131,8 @@ while (readLine) {
 		}
 	}
 	unless (m#^\w+://.+/([^\s/]+)\z#) {
-		$rc ||= 1;
 		warn "bad part: $_";
-		last if ++$err >= 4;
-		next;
+		exit 4; # like 404
 	}
 	my ($url, $fname) = ($_, $1);
 	next if -s $fname;
@@ -148,9 +146,9 @@ while (readLine) {
 		$err++;
 	}
 	# 404, won't be able to assemble
-	last if $rc == 4;
-	# a few consecutive errors, need to change proxy
-	exit 3 if $err >= 4;
+	exit 4 if $rc == 4;
+	# a few consecutive errors, need to change proxy?
+	exit 3 if $err >= 3;
 }
 
 exit $rc;
