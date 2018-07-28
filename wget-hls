@@ -266,6 +266,7 @@ wGetHLS()
 	tolera='non-existing SPS 0 referenced in buffering period
 SPS unavailable in decode_picture_timing
 Application provided invalid, non.monotonically increasing dts to muxer
+Invalid timestamps stream=
 Last message repeated'
 	if grep -q -v "$tolera" $tmpdir/fferr; then
 		echo >&2 "${0##*/}: rechecking"
