@@ -295,6 +295,7 @@ Last message repeated'
 		# if some error is encountered in more than half of the parts,
 		# it's not a real error
 		perl -pi -e 's/ @ 0x[0-9a-f]+\]/]/' $tmpdir/parts.all-errors
+		perl -pi -e 's/\b(pts|dts|size)=\d+\b/$1=42/g' $tmpdir/parts.all-errors
 		sort -t$'\t' -u -k2,2 -k1,1 -o $tmpdir/parts.all-errors{,}
 		cut -f2 $tmpdir/parts.all-errors |uniq -c |
 			awk -v n=$n '(n==1||$1<=n/2){sub(" +[0-9]+ ","");print}' |
