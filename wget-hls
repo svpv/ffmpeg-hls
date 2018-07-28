@@ -301,6 +301,7 @@ Last message repeated'
 			sort -u >$tmpdir/parts.real-errors
 		join -t$'\t' -12 -21 -o 1.1 $tmpdir/parts.{all,real}-errors >$tmpdir/parts.ck
 		sort -u -o $tmpdir/parts.ck{,}
+		echo >&2 "${0##*/}: $(wc -l <$tmpdir/parts.ck) parts to recheck"
 		while read -r part; do
 			f=${part##*/}
 			[[ $part = *://* ]] || part=${1%/*}/$part
