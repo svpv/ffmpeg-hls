@@ -336,7 +336,7 @@ case $hlsdirprefix in
 	  *) hlsdirprefix=${TMPDIR:-/tmp}/hls-$hlsdirprefix ;;
 esac
 
-wGetHLS "${1:?}" "${2:-$1}" >&2
+wGetHLS "${1:?}" "${2:-$1}" </dev/null >&2
 # returning something within tmpdir?
 [ -n "$hlsdir" ] || trap - EXIT
 echo "${time:?}" "${OUT:?}"
