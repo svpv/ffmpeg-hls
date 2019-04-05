@@ -101,7 +101,7 @@ sub download_chunk ($$) {
 		return;
 	}
 	if ($right_size and $size != $right_size or
-	    tsPacketSize and $right_size % tsPacketSize) {
+	    tsPacketSize and $size % tsPacketSize) {
 		warn "$fname: wrong size";
 		$rc ||= 1;
 		return;
