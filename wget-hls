@@ -165,15 +165,6 @@ OUT=
 time=
 hlsdir=
 hlsdirprefix=
-ffmpeg=(nice -5 ffmpeg)
-
-CleanLogTime()
-{
-	sed -i 's/\r/\n/g' "$1"
-	sed -ni '/\w/p' "$1"
-	time=$(sed -n '$s/^\(frame\|size\)=.* time=\([^ ]\+\) .*/\2/p' "$1")
-	sed -i '/^\(frame\|size\)=.* time=/d' $1
-}
 
 wGetHLS()
 {
@@ -219,8 +210,8 @@ wGetHLS()
 		OUT=$m3u
 	fi
 	rc=
-	"${ffmpeg[@]}" -v warning -stats -i "$OUT" -f null - &>$tmpdir/fferr || rc=$?
-	CleanLogTime $tmpdir/fferr
+	nice -5 ffmpeg -hide_banner -nostats -i "$OUT" -f null - &>$tmpdir/fferr || rc=1
+	time=$("$av0dir"/fflog-errors $tmpdir/fferr) || rc=1
 	tolera='non-existing SPS 0 referenced in buffering period
 SPS unavailable in decode_picture_timing
 Application provided invalid, non.monotonically increasing dts to muxer
@@ -238,23 +229,10 @@ Last message repeated'
 		return 0
 	fi >&2
 	if [ "$(head -c7 "$m3u")" = '#EXTM3U' ]; then
-		local n=0
-		while read -r part; do
-			f=${part##*/}
-			if ! [ -s "$f" ]; then
-				echo >&2 "${0##*/}: missing $f (cannot happen)"
-				false
-			fi
-			"${ffmpeg[@]}" -v warning -i "$f" -f null - 2>&1 </dev/null |
-				stdbuf -oL sed "s|\t| |g;s|^|${part//|/\\|}\t|" &
-			(( ++n < 2 )) || wait -n
-		done <$tmpdir/parts >$tmpdir/parts.all-errors
-		wait
+		n=$(wc -l <$tmpdir/parts)
+		cat <$tmpdir/fferr >$tmpdir/parts.all-errors
 		# if some error is encountered in more than half of the parts,
 		# it's not a real error
-		perl -pi -e 's/ @ 0x[0-9a-f]+\]/]/' $tmpdir/parts.all-errors
-		perl -pi -e 's/\b(pts|dts|size)=\d+\b/$1=42/g' $tmpdir/parts.all-errors
-		perl -pi -e 's/\b(dts to muxer in stream \d): \d+ >= \d+/$1/' $tmpdir/parts.all-errors
 		sort -t$'\t' -u -k2,2 -k1,1 -o $tmpdir/parts.all-errors{,}
 		cut -f2 $tmpdir/parts.all-errors |uniq -c |
 			awk -v n=$n '(n==1||$1<=n/2){sub(" +[0-9]+ ","");print}' |
@@ -271,8 +249,8 @@ Last message repeated'
 		DoubleCheck "$1" "$m3u"
 	fi
 	rc=
-	"${ffmpeg[@]}" -xerror -v warning -stats -i "$OUT" -f null - &>$tmpdir/fferr || rc=$?
-	CleanLogTime $tmpdir/fferr
+	nice -5 ffmpeg -xerror -hide_banner -nostats -i "$OUT" -f null - &>$tmpdir/fferr || rc=1
+	time=$("$av0dir"/fflog-errors $tmpdir/fferr) || rc=1
 	# stream still corrupted?
 	if grep -v "$tolera" $tmpdir/fferr; then
 		echo "${0##*/}: cannot proceed"
