@@ -6,7 +6,7 @@ wGetO()
 	wopt=(--timeout 20 --tries 3)
 	if ! { "${wget[@]}" "${wopt[@]}" -q -O "$@" && [ -s "$1" ]; }; then
 		if [ -n "${http_proxy-}" ]; then
-			update-uk-proxy --hls --force
+			update-uk-proxy --hls
 			. uk_proxy.sh
 		fi
 		if ! "${wget[@]}" "${wopt[@]}" -nv -O "$@" &>$tmpdir/werr; then
@@ -74,10 +74,6 @@ wGetStats()
 UpdateProxyArgs()
 {
 	file= args=()
-	if [ $1 = --force ]; then
-		args+=(--not-proxy=$http_proxy)
-		shift
-	fi
 	local p=$1 loop=$2; shift 2
 	local q f=uk_proxy.sh
 	for q; do
@@ -165,11 +161,7 @@ ParaTry()
 			continue
 		fi
 		# relaunch the kid
-		local force=
-		if [ $pidrc = 3 ]; then
-			force=--force
-		fi
-		UpdateKidProxy $force $p ":" "$@" </dev/null
+		UpdateKidProxy $p ":" "$@" </dev/null
 		b=b$((1+($p-1)%2))
 		"$av0dir"/wget-parts "${!b}" <&0 &
 		pids="$pids $! "
