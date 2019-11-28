@@ -73,7 +73,7 @@ wGetStats()
 
 UpdateProxyArgs()
 {
-	file= args=()
+	file= excl=()
 	local p=$1 loop=$2; shift 2
 	local q f=uk_proxy.sh
 	for q; do
@@ -82,10 +82,9 @@ UpdateProxyArgs()
 		fi
 		if [ $p = $q ]; then
 			file=$f
-			args+=(--file=$f)
 			$loop
 		else
-			args+=(--not-file=$f)
+			excl+=(--not-file=$f)
 		fi
 	done
 }
@@ -93,10 +92,11 @@ UpdateProxyArgs()
 UpdateKidProxy()
 {
 	if [ -n "${http_proxy-}" ]; then
-		local file args
+		local file excl
 		UpdateProxyArgs "$@"
-		args+=(--hls --recheck)
-		until update-uk-proxy "${args[@]}"; do : recheck; done
+		update-uk-proxy --hls --file=$file ${excl[@]} ||
+		update-uk-proxy --hls --file=$file ${excl[@]} ||
+		until update-uk-proxy --file=$file --hls; do :; done
 		. "$file"
 	fi
 }
