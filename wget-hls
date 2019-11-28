@@ -49,6 +49,12 @@ remove_tmpdir()
 	exit $1
 }
 
+untrap_tmpdir()
+{
+	trap - EXIT
+	trap - HUP INT QUIT PIPE TERM
+}
+
 tmpdir=$(mktemp -dt "${0##*/}.XXXXXXXX")
 trap 'exit 143' HUP INT QUIT PIPE TERM
 trap 'remove_tmpdir $?' EXIT
@@ -163,51 +169,70 @@ wGetParts()
 
 OUT=
 time=
-hlsdir=
-hlsdirprefix=
+hlsname=
 
 wGetHLS()
 {
-	m3u=$tmpdir/hls.out
-	wGetO "$m3u" "$1"
-	if [ "$(head -c7 "$m3u")" = '#EXTM3U' ]; then
-		Clean()
-		{
-	perl -pi -e 's/\r/\n/g' "$2"
-	perl -ni -le 'print if /^#EXT/ or /^[^#]/' "$2"
-	perl -pe 'BEGIN{$base=shift} s#^\Q$base\E/##' "${1%/*}" <"$2" >"$2"c
-		}
+	out1=$tmpdir/wget.out1
+	wGetO "$out1" "$1"
+	type= ext=
+	if [ "$(head -c7 "$out1")" = '#EXTM3U' ]; then
+		type=hls ext=m3u8
+	elif [ "$(head -c5 "$out1")" = '<?xml' ] && grep -q '<MPD\>' "$out1"; then
+		type=dash ext=mpd
+	else
+		echo "${0##*/}: neither HLS nor DASH"
+	fi
+	if [ -n "$type" ]; then
 		if [[ $1 == $2 ]]; then
-			DoubleCheck "$1" "$m3u"
-			Clean "$1" "$m3u"
+			DoubleCheck "$1" "$out1"
 		else
-			n3u=$tmpdir/hls.put
-			wGetO "$n3u" "$2"
-			if ! cmp -s "$m3u" "$n3u"; then
-				DoubleCheck "$1" "$m3u"
-				DoubleCheck "$2" "$n3u"
+			out2=$tmpdir/wget.out2
+			wGetO "$out2" "$2"
+			if ! cmp -s "$out1" "$out2"; then
+				DoubleCheck "$1" "$out1"
+				DoubleCheck "$2" "$out2"
 			fi
-			Clean "$1" "$m3u"
-			Clean "$2" "$n3u"
-			if ! cmp -s "$m3u"c "$n3u"c; then
-				echo >&2 "${0##*/}: URLs provide different playlists"
+			if ! cmp -s "$out1" "$out2"; then
+				echo >&2 "${0##*/}: URLs provide different streams"
 				set -- "$1" "$1"
 			fi
+			rm "$out2"
 		fi
 		# always hash original m3u - segment names can be very simple,
 		# it is the directory name that makes the list of segments unique
-		hlsdir=$(sha1sum <"$m3u")
-		hlsdir=$hlsdirprefix-${hlsdir:0:20}
-		mkdir -p "$hlsdir"
+		hlsdir=$(sha1sum <"$out1")
+		case $hlsname in
+			*/*) hlsdir=$hlsname-$type-${hlsdir:0:20} ;;
+			 '') hlsdir=${TMPDIR:-/tmp}/$type-${hlsdir:0:20} ;;
+			  *) hlsdir=${TMPDIR:-/tmp}/$hlsname-$type-${hlsdir:0:20} ;;
+		esac
+		mkdir -p "$hlsdir"/.tmp
 		cd "$hlsdir"
-		if grep '^[^#]' "$m3u"c >$tmpdir/parts; then
-			wGetParts "${1%/*}" "${2%/*}"
-		fi
-		perl -pe 's|^[^#].*/||' "$m3u"c >.m3u
-		OUT=$PWD/.m3u
+		mv "$out1" .$ext
+		OUT=$PWD/.$ext
+		rmdir "$tmpdir"
+		untrap_tmpdir
+		tmpdir=$PWD/.tmp
 	else
 		# downloaded something else, will return it within tmpdir
-		OUT=$m3u
+		cd "$tmpdir"
+		OUT=$out1
+	fi
+	if [ "$type" = hls ]; then
+		perl -pi -e 's/\r/\n/g' .m3u8
+		perl -ni -le 'print if /^#EXT/ or /^[^#]/' .m3u8
+		perl -pi -e 'BEGIN{$base=shift} s#^\Q$base\E/##' "${1%/*}" .m3u8
+		if grep '^[^#]' .m3u8 >$tmpdir/parts; then
+			wGetParts "${1%/*}" "${2%/*}"
+		else
+			echo "${0##*/}: no HLS segments"
+			return 1
+		fi
+		perl -pi -e 's|^[^#].*/||' .m3u8
+	elif [ "$type" = dash ]; then
+		echo "TODO: parse DASH manifest"
+		false
 	fi
 	rc=
 	nice -5 ffmpeg -hide_banner -nostats -i "$OUT" -f null - &>$tmpdir/fferr || rc=1
@@ -228,7 +253,7 @@ Last message repeated'
 	else
 		return 0
 	fi >&2
-	if [ "$(head -c7 "$m3u")" = '#EXTM3U' ]; then
+	if [ -n "$type" ]; then
 		n=$(wc -l <$tmpdir/parts)
 		cat <$tmpdir/fferr >$tmpdir/parts.all-errors
 		# if some error is encountered in more than half of the parts,
@@ -246,7 +271,7 @@ Last message repeated'
 			DoubleCheck "$part" "$f" </dev/null
 		done <$tmpdir/parts.ck
 	else
-		DoubleCheck "$1" "$m3u"
+		DoubleCheck "$1" "$OUT"
 	fi
 	rc=
 	nice -5 ffmpeg -xerror -hide_banner -nostats -i "$OUT" -f null - &>$tmpdir/fferr || rc=1
@@ -263,17 +288,12 @@ Last message repeated'
 }
 
 if [[ ${1:?} = --name=* ]]; then
-	hlsdirprefix=${1#--name=}
+	hlsname=${1#--name=}
 	shift
 fi
 
-case $hlsdirprefix in
-	*/*) ;;
-	 '') hlsdirprefix=${TMPDIR:-/tmp}/hls ;;
-	  *) hlsdirprefix=${TMPDIR:-/tmp}/hls-$hlsdirprefix ;;
-esac
 
 wGetHLS "${1:?}" "${2:-$1}" </dev/null >&2
 # returning something within tmpdir?
-[ -n "$hlsdir" ] || trap - EXIT
+[ -n "$hlsdir" ] || untrap_tmpdir
 echo "${time:?}" "${OUT:?}"
