@@ -171,6 +171,7 @@ OUT=
 time=
 type=
 hlsname=
+dashopt=()
 
 wGetHLS()
 {
@@ -232,8 +233,14 @@ wGetHLS()
 		fi
 		perl -pi -e 's|^[^#].*/||' .m3u8
 	elif [ "$type" = dash ]; then
-		echo "TODO: parse DASH manifest"
-		false
+		"$av0dir"/dash-manifest "${dashopt[@]}" .mpd >$tmpdir/AVparts
+		if [ -s $tmpdir/AVparts ]; then
+			sed -n 's/^[AV]//p' <$tmpdir/AVparts >$tmpdir/parts
+			wGetParts "${1%/*}" "${2%/*}"
+		else
+			echo "${0##*/}: no DASH segments"
+			return 1
+		fi
 	fi
 	rc=
 	nice -5 ffmpeg -hide_banner -nostats -i "$OUT" -f null - &>$tmpdir/fferr || rc=1
@@ -288,11 +295,24 @@ Last message repeated'
 	fi >&2
 }
 
-if [[ ${1:?} = --name=* ]]; then
-	hlsname=${1#--name=}
-	shift
-fi
-
+argv=$(getopt -n "${0##*/}" -o X -l name:,audio:,video: -- "$@")
+eval set -- "$argv"
+while :; do
+	case "$1" in
+		--name)
+			hlsname=${2:?}
+			shift 2 ;;
+		--audio|--video)
+			dashopt+=("$1=${2:?}")
+			shift 2 ;;
+		--)
+			shift
+			break ;;
+		*)
+			echo "${0##*/}: unrecognized option $1" >&2
+			exit 1 ;;
+	esac
+done
 
 wGetHLS "${1:?}" "${2:-$1}" </dev/null >&2
 # returning something within tmpdir?

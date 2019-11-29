@@ -1,0 +1,113 @@
+#!/usr/bin/perl
+# Edits .mpd inplace, keeping only one audio/video representation.
+# Prints segment URLs to stdout.
+use v5.12;
+
+sub dura ($) {
+    local $_ = shift;
+    my ($h, $m, $s);
+    s/^PT// or return;
+    s/^(\d\d?)H// and $h = $1;
+    s/^(\d\d?)M// and $m = $1;
+    s/^(\d\d?(?:\.\d+))S// and $s = $1;
+    $_ eq "" or return;
+    return $h * 3600 + $m * 60 + $s;
+}
+
+use Getopt::Long 2.24 qw(GetOptions :config gnu_getopt);
+GetOptions "audio=s" => \my $opt_audio, "video=s" => \my $opt_video
+    or die "getopt failed";
+die "Usage: $0 .mpd >.AVparts" unless @ARGV == 1;
+use XML::Simple qw(XMLin XMLout);
+my $xml = do {
+    open my $fh, "<", $ARGV[0] or die "$ARGV[0]: $!";
+    XMLin($fh, KeyAttr => [], ForceArray => 1, SuppressEmpty => 1);
+};
+
+sub filter ($$@) {
+    my ($what, $opt, @list) = @_;
+    use sort 'stable';
+    @list = sort { $$b{bandwidth} <=> $$a{bandwidth} } @list
+	or die "no $what";
+    if ($opt =~ s/\+$//) {
+	@list = grep { $$_{bandwidth} >= $opt } @list
+	    or die "cannot find $what >= $opt";
+    }
+    elsif ($opt) {
+	@list = grep { $$_{bandwidth} == $opt } @list
+	    or die "cannot find $what == $opt";
+    }
+    return $list[0];
+}
+
+for (@{$$xml{Period}}) {
+    my $dura = dura $$_{duration}
+	or die "cannot parse Period.duration";
+    our $base = $$_{BaseURL};
+    delete $$_{BaseURL};
+    my (@A, @V);
+    for (@{$$_{AdaptationSet}}) {
+	local $base = $base.$$_{BaseURL};
+	delete $$_{BaseURL};
+	our $st = $$_{SegmentTemplate};
+	my $r = $$_{Representation};
+	my $AV;
+	if ($$_{contentType} eq "audio") {
+	    @$r = filter "audio", $opt_audio, @$r;
+	    $AV = \@A;
+	}
+	elsif ($$_{contentType} eq "video") {
+	    @$r = filter "video", $opt_video, @$r;
+	    $AV = \@V;
+	}
+	else {
+	    warn "unknown content type $$_{contentType}";
+	    continue;
+	}
+	for (@$r) {
+	    local $base = $base.$$_{BaseURL};
+	    delete $$_{BaseURL};
+	    local $st = $$_{SegmentTemplate} ||= $st
+		and ($st) = @$st
+		or die "no SegmentTemplate";
+	    my $segdura = $$st{duration} / $$st{timescale};
+	    my $nseg = int($dura / $segdura);
+	    $nseg += ($dura - $nseg * $segdura > 0.111);
+	    my ($seg0, $seg1) = @{$st}{qw[initialization media]};
+	    my $id = $$_{id} or die "no Representation.id";
+	    $seg0 =~ s/\$RepresentationID\$/$id/g;
+	    $seg1 =~ s/\$RepresentationID\$/$id/g;
+	    push @$AV, $seg0;
+	    for my $i (1..$nseg) {
+		my $seg = $seg1;
+		$seg =~ s/\$Number\$/$i/ or die "no number in template";
+		push @$AV, $seg;
+	    }
+	}
+    }
+    die "no audio" unless @A;
+    unless (@V) {
+	die "no video" if $opt_video;
+	say "A".$_ for @A;
+	continue;
+    }
+    # Interleave @A and @V media segments.
+    my $aseg = 1 / @A;
+    my $vseg = 1 / @V;
+    my ($acover, $vcover);
+    while (@A and @V) {
+	if ($vcover <= $acover) {
+	    say "V".shift @V;
+	    $vcover += $vseg;
+	}
+	else {
+	    say "A".shift @A;
+	    $acover += $aseg;
+	}
+    }
+    say "V".$_ for @V;
+    say "A".$_ for @A;
+}
+
+open my $fh, ">", $ARGV[0] or die "$ARGV[0]: $!";
+print $fh XMLout($xml, XMLDecl => 1, RootName => 'MPD', KeyAttr => [], AttrIndent => 1);
