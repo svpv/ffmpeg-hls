@@ -78,7 +78,9 @@ for (@{$$xml{Period}}) {
 	    $seg0 =~ s/\$RepresentationID\$/$id/g;
 	    $seg1 =~ s/\$RepresentationID\$/$id/g;
 	    push @$AV, $seg0;
-	    for my $i (1..$nseg) {
+	    my $n0 = $$st{startNumber};
+	    $n0 = $$st{startNumber} = 1 if $n0 eq "";
+	    for my $i ($n0 .. $n0 + $nseg - 1) {
 		my $seg = $seg1;
 		$seg =~ s/\$Number\$/$i/ or die "no number in template";
 		push @$AV, $seg;
