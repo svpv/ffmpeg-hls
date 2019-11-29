@@ -7,9 +7,12 @@ my ($part, @w, $time);
 sub flush ($) {
     my $n = shift or return;
     for (@w) {
-	if ($n == 1) {
-	    next if /^Input #/;
-	    next if /^Output #/;
+	next if /^\[AVIOContext.* Statistics:/;
+	next if /^\[h264.* Reinit context/;
+	next if /^\[graph .* from stream/;
+	if ($n < 4) {
+	    next if /^Input (?:file )?#/;
+	    next if /^Output (?:file )?#/;
 	    next if /^Stream mapping/;
 	    next if /^Press\s/;
 	    next if /^\s/;
@@ -18,6 +21,7 @@ sub flush ($) {
 	    $time = $2,
 	    next if /^(frame|size)=.* time=(\S+)/;
 	    next if /^video:.* audio:/;
+	    next if /No more output streams/;
 	}
 	s/ @ 0x[0-9a-f]+\]/]/;
 	s/\b(pts|dts|size)=\d+\b/$1=42/g;
@@ -30,19 +34,20 @@ sub flush ($) {
     local $^I = "";
     while (<>) {
 	chomp;
-	if (/^\[.*Opening '([^']+)' for reading/) {
+	if (/^\[.*Opening '([^']+)' for reading/ or
+	    /^\[.*DASH request for url '([^']+)'/)
+	{
 	    flush $n++;
 	    $part = $1;
+	    $part =~ s#.*/##;
 	    undef @w;
 	}
 	elsif ($part and /\w/) {
 	    push @w, $_;
 	}
+	flush -1 if eof;
     }
     die "no parts" unless $n;
-    flush -1;
-}
-{
     die "no time" unless $time;
     say $time;
 }
