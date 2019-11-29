@@ -167,6 +167,53 @@ wGetParts()
 	return $rc
 }
 
+RecheckParts()
+{
+	local n=0 seg0=
+	if [ $type = dash ]; then
+		read -r seg0
+		seg0=${seg0##*/}
+		if ! [ -s "${seg0:?}" ]; then
+			echo >&2 "${0##*/}: missing $seg0 (cannot happen)"
+			false
+		fi
+	fi
+	while read -r part; do
+		f=${part##*/}
+		if ! [ -s "${f:?}" ]; then
+			echo >&2 "${0##*/}: missing $f (cannot happen)"
+			false
+		fi
+		if [ "$type" = dash ]; then
+			cat "$seg0" "$f" |
+			nice -5 ffmpeg -xerror -v error -i - -f null - 2>&1 |
+			stdbuf -oL sed "s|\t| |g;s|^|${part//|/\\|}\t|" &
+		else
+			nice -5 ffmpeg -xerror -v error -i "$f" -f null - 2>&1 </dev/null |
+			stdbuf -oL sed "s|\t| |g;s|^|${part//|/\\|}\t|" &
+		fi
+		(( ++n < 2 )) || wait -n
+	done >$tmpdir/parts.all-errors
+	wait
+	# if some error is encountered in more than half of the parts,
+	# it's not a real error
+	perl -pi -e 's/ @ 0x[0-9a-f]+\]/]/' $tmpdir/parts.all-errors
+	perl -pi -e 's/\b(pts|dts|size)=\d+\b/$1=42/g' $tmpdir/parts.all-errors
+	perl -pi -e 's/\b(dts to muxer in stream \d): \d+ >= \d+/$1/' $tmpdir/parts.all-errors
+	sort -t$'\t' -u -k2,2 -k1,1 -o $tmpdir/parts.all-errors{,}
+	cut -f2 $tmpdir/parts.all-errors |uniq -c |
+		awk -v n=$n '(n==1||$1<=n/2){sub(" +[0-9]+ ","");print}' |
+		sort -u >$tmpdir/parts.real-errors
+	join -t$'\t' -12 -21 -o 1.1 $tmpdir/parts.{all,real}-errors >$tmpdir/parts.ck
+	sort -u -o $tmpdir/parts.ck{,}
+	echo >&2 "${0##*/}: $(wc -l <$tmpdir/parts.ck) parts to recheck"
+	while read -r part; do
+		f=${part##*/}
+		[[ $part = *://* ]] || part=${1%/*}/$part
+		DoubleCheck "$part" "$f" </dev/null
+	done <$tmpdir/parts.ck
+}
+
 FixupExamLog()
 {
 	sed -i 's/\r/\n/g' "$1"
@@ -268,35 +315,12 @@ Last message repeated'
 		return 0
 	fi >&2
 	if [ "$type" = hls ]; then
-		local n=0
-		while read -r part; do
-			f=${part##*/}
-			if ! [ -s "$f" ]; then
-				echo >&2 "${0##*/}: missing $f (cannot happen)"
-				false
-			fi
-			"${ffmpeg[@]}" -v warning -i "$f" -f null - 2>&1 </dev/null |
-				stdbuf -oL sed "s|\t| |g;s|^|${part//|/\\|}\t|" &
-			(( ++n < 2 )) || wait -n
-		done <$tmpdir/parts >$tmpdir/parts.all-errors
-		wait
-		# if some error is encountered in more than half of the parts,
-		# it's not a real error
-		perl -pi -e 's/ @ 0x[0-9a-f]+\]/]/' $tmpdir/parts.all-errors
-		perl -pi -e 's/\b(pts|dts|size)=\d+\b/$1=42/g' $tmpdir/parts.all-errors
-		perl -pi -e 's/\b(dts to muxer in stream \d): \d+ >= \d+/$1/' $tmpdir/parts.all-errors
-		sort -t$'\t' -u -k2,2 -k1,1 -o $tmpdir/parts.all-errors{,}
-		cut -f2 $tmpdir/parts.all-errors |uniq -c |
-			awk -v n=$n '(n==1||$1<=n/2){sub(" +[0-9]+ ","");print}' |
-			sort -u >$tmpdir/parts.real-errors
-		join -t$'\t' -12 -21 -o 1.1 $tmpdir/parts.{all,real}-errors >$tmpdir/parts.ck
-		sort -u -o $tmpdir/parts.ck{,}
-		echo >&2 "${0##*/}: $(wc -l <$tmpdir/parts.ck) parts to recheck"
-		while read -r part; do
-			f=${part##*/}
-			[[ $part = *://* ]] || part=${1%/*}/$part
-			DoubleCheck "$part" "$f" </dev/null
-		done <$tmpdir/parts.ck
+		RecheckParts "$1" <$tmpdir/parts
+	elif [ "$type" = dash ]; then
+		sed -n 's/^A//p' <$tmpdir/AVparts >$tmpdir/Aparts
+		sed -n 's/^V//p' <$tmpdir/AVparts >$tmpdir/Vparts
+		[ ! -s $tmpdir/Aparts ] || RecheckParts "$1" <$tmpdir/Aparts
+		[ ! -s $tmpdir/Vparts ] || RecheckParts "$1" <$tmpdir/Vparts
 	else
 		DoubleCheck "$1" "$OUT"
 	fi
