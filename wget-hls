@@ -65,7 +65,7 @@ av0dir=$(dirname "$av0")
 wGetStats()
 {
 	local n
-	n=$(wc -l <$tmpdir/parts)
+	n=$(wc -l <.parts)
 	set +f
 	while :; do
 		set -- *
@@ -147,7 +147,7 @@ wGetParts()
 	local try rc=
 	local npara=2
 	for try in {1..3}; do
-		left=$(comm -23 <(perl -pe 's#^\w+://.*/##' $tmpdir/parts |sort) <(ls) |wc -l)
+		left=$(comm -23 <(perl -pe 's#^\w+://.*/##' .parts |sort) <(ls) |wc -l)
 		if [ $left = 0 ]; then
 			break
 		elif [ $left -lt $npara ]; then
@@ -155,7 +155,7 @@ wGetParts()
 		fi
 		rc=
 		local para=$(seq 1 $npara)
-		ParaTry "$1" "$2" ${para:?} <$tmpdir/parts
+		ParaTry "$1" "$2" ${para:?} <.parts
 		if [ -z "$rc" ]; then
 			break
 		fi
@@ -280,17 +280,17 @@ wGetHLS()
 		perl -pi -e 's/\r/\n/g' .m3u8
 		perl -ni -le 'print if /^#EXT/ or /^[^#]/' .m3u8
 		perl -pi -e 'BEGIN{$base=shift} s#^\Q$base\E/##' "${1%/*}" .m3u8
-		if grep '^[^#]' .m3u8 >$tmpdir/parts; then
+		if grep '^[^#]' .m3u8 >.parts; then
+			perl -pi -e 's|^[^#].*/||' .m3u8
 			wGetParts "${1%/*}" "${2%/*}"
 		else
 			echo "${0##*/}: no HLS segments"
 			return 1
 		fi
-		perl -pi -e 's|^[^#].*/||' .m3u8
 	elif [ "$type" = dash ]; then
 		"$av0dir"/dash-manifest "${dashopt[@]}" .mpd >$tmpdir/AVparts
 		if [ -s $tmpdir/AVparts ]; then
-			sed -n 's/^[AV]//p' <$tmpdir/AVparts >$tmpdir/parts
+			sed -n 's/^[AV]//p' <$tmpdir/AVparts >.parts
 			wGetParts "${1%/*}" "${2%/*}"
 		else
 			echo "${0##*/}: no DASH segments"
@@ -315,7 +315,7 @@ Last message repeated'
 		return 0
 	fi >&2
 	if [ "$type" = hls ]; then
-		RecheckParts "$1" <$tmpdir/parts
+		RecheckParts "$1" <.parts
 	elif [ "$type" = dash ]; then
 		sed -n 's/^A//p' <$tmpdir/AVparts >$tmpdir/Aparts
 		sed -n 's/^V//p' <$tmpdir/AVparts >$tmpdir/Vparts
