@@ -73,6 +73,12 @@ use constant {
 
 my $rc; # exit status, sticky
 
+use Getopt::Long 2.24 qw(GetOptions :config gnu_getopt);
+GetOptions hls => \my $opt_hls, dash => \my $opt_dash
+    or die "getopt failed";
+my $dirURL = $ARGV[0] and @ARGV == 1
+    or die "Usage: $0 dirURL <parts";
+
 sub download_chunk ($$) {
 	my ($url, $fname) = @_;
 	my $right_size;
@@ -89,7 +95,7 @@ sub download_chunk ($$) {
 		return;
 	}
 	if ($right_size and $right_size < 1 or
-	    tsPacketSize and $right_size % tsPacketSize) {
+	    $opt_hls and $right_size % tsPacketSize) {
 		warn "$fname: bad expected size: $right_size";
 		$rc ||= 1;
 		return;
@@ -101,14 +107,14 @@ sub download_chunk ($$) {
 		return;
 	}
 	if ($right_size and $size != $right_size or
-	    tsPacketSize and $size % tsPacketSize) {
+	    $opt_hls and $size % tsPacketSize) {
 		warn "$fname: wrong size";
 		$rc ||= 1;
 		return;
 	}
 	open my $fh, "<", ".part$$" or die "$fname: $!";
 	read $fh, my $c, 1 or die "$fname: $!";
-	if (tsSyncByte and $c ne tsSyncByte) {
+	if ($opt_hls and $c ne tsSyncByte) {
 		warn "$fname: bad sync byte";
 		$rc ||= 1;
 		return;
@@ -118,17 +124,10 @@ sub download_chunk ($$) {
 
 my $err; # consecutive errors, not sticky
 
-my $base = shift;
-
 while (readLine) {
 	chomp;
 	unless (m#^\w+://#) {
-		if ($base) {
-			$_ = "$base/$_";
-		}
-		else {
-			warn "no base for $_";
-		}
+		$_ = "$dirURL/$_";
 	}
 	unless (m#^\w+://.+/([^\s/]+)\z#) {
 		warn "bad part: $_";
