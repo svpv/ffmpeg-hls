@@ -163,7 +163,7 @@ wGetParts()
 		set -- "$2" "$1"
 	done
 	kill %1
-	wait
+	wait 2>/dev/null
 	return $rc
 }
 
