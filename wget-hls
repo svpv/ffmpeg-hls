@@ -235,7 +235,7 @@ wGetHLS()
 	ext=
 	if [ "$(head -c7 "$out1")" = '#EXTM3U' ]; then
 		type=hls ext=m3u8
-	elif [ "$(head -c5 "$out1")" = '<?xml' ] && grep -q '<MPD\>' "$out1"; then
+	elif [ "$(head -c1 "$out1")" = '<' ] && grep -q '<MPD\>' "$out1"; then
 		type=dash ext=mpd
 	else
 		echo "${0##*/}: neither HLS nor DASH"
