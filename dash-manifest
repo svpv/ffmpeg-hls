@@ -26,6 +26,7 @@ my $xml = do {
 
 sub filter ($$@) {
     my ($what, $opt, @list) = @_;
+    return if $opt eq "0";
     use sort 'stable';
     @list = sort { $$b{bandwidth} <=> $$a{bandwidth} } @list
 	or die "no $what";
