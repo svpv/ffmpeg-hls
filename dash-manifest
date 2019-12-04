@@ -63,7 +63,7 @@ for (@{$$xml{Period}}) {
 	}
 	else {
 	    warn "unknown content type $$_{contentType}";
-	    continue;
+	    next;
 	}
 	for (@$r) {
 	    local $base = $base.$$_{BaseURL};
@@ -92,7 +92,7 @@ for (@{$$xml{Period}}) {
     unless (@V) {
 	die "no video" if $opt_video;
 	say "A".$_ for @A;
-	continue;
+	next;
     }
     # Interleave @A and @V media segments.
     my $aseg = 1 / @A;
