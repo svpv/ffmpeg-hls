@@ -79,6 +79,18 @@ GetOptions hls => \my $opt_hls, dash => \my $opt_dash
 my $dirURL = $ARGV[0] and @ARGV == 1
     or die "Usage: $0 dirURL <parts";
 
+sub check_ts () {
+    open my $fh, "<", ".part$$" or die $!;
+    my $n = read $fh, my $p, tsPacketSize;
+    while (1) {
+	die "read packet" if $n != tsPacketSize;
+	return if substr($p, 0, 1) ne tsSyncByte;
+	$n = read $fh, $p, tsPacketSize or last;
+    }
+    die "read: $!" unless defined $n;
+    return 1;
+}
+
 sub download_chunk ($$) {
 	my ($url, $fname) = @_;
 	my $right_size;
@@ -112,9 +124,7 @@ sub download_chunk ($$) {
 		$rc ||= 1;
 		return;
 	}
-	open my $fh, "<", ".part$$" or die "$fname: $!";
-	read $fh, my $c, 1 or die "$fname: $!";
-	if ($opt_hls and $c ne tsSyncByte) {
+	if ($opt_hls and not check_ts) {
 		warn "$fname: bad sync byte";
 		$rc ||= 1;
 		return;
