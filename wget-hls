@@ -146,7 +146,7 @@ wGetParts()
 	wGetStats &
 	local try rc=
 	local npara=2
-	for try in {1..3}; do
+	for try in 1 2 3 4 5; do
 		left=$(comm -23 <(perl -pe 's#^\w+://.*/##' .parts |sort) <(ls) |wc -l)
 		if [ $left = 0 ]; then
 			break
