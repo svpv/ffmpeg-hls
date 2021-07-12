@@ -15,11 +15,11 @@ $SIG{INT} =
 $SIG{QUIT} =
 $SIG{PIPE} =
 $SIG{TERM} = sub {
-	unlink ".part$$";
-	my $sig = shift;
-	delete $SIG{$sig};
-	kill $sig => $$;
-	exit 143; # cannot happen
+    unlink ".part$$";
+    my $sig = shift;
+    delete $SIG{$sig};
+    kill $sig => $$;
+    exit 143; # cannot happen
 };
 
 my $Timeout = 20;
@@ -29,13 +29,13 @@ my $Size = 0;
 my $Next = $Size + $Progress;
 
 $SIG{ALRM} = sub {
-	if ($Size + -s ".part$$" < $Next) {
-		warn "terminating";
-		unlink ".part$$";
-		exit 124; # like timeout(1)
-	}
-	$Next = $Size + -s _ + $Progress;
-	alarm $Timeout;
+    if ($Size + -s ".part$$" < $Next) {
+	warn "terminating";
+	unlink ".part$$";
+	exit 124; # like timeout(1)
+    }
+    $Next = $Size + -s _ + $Progress;
+    alarm $Timeout;
 };
 
 alarm $Timeout;
@@ -46,29 +46,29 @@ my $sigset_all = POSIX::SigSet->new;
 $sigset_all->fillset;
 
 sub readLine () {
-	use Fcntl qw(LOCK_EX LOCK_UN);
-	# STDIN cannot be locked with flock(2) in this way
-	open my $dirfd, "<", "." or die;
-	flock $dirfd, LOCK_EX or die "flock: $!";
-	defined sigprocmask SIG_BLOCK, $sigset_all, $sigset_old
-		or die "sigprocmask: $!";
-	undef $_;
-	while (sysread STDIN, my $c, 1) {
-		if ($c eq "\n") {
-			last if defined;
-		}
-		else {
-			$_ .= $c;
-		}
+    use Fcntl qw(LOCK_EX LOCK_UN);
+    # STDIN cannot be locked with flock(2) in this way
+    open my $dirfd, "<", "." or die;
+    flock $dirfd, LOCK_EX or die "flock: $!";
+    defined sigprocmask SIG_BLOCK, $sigset_all, $sigset_old
+	or die "sigprocmask: $!";
+    undef $_;
+    while (sysread STDIN, my $c, 1) {
+	if ($c eq "\n") {
+	    last if defined;
 	}
-	sigprocmask SIG_SETMASK, $sigset_old;
-	flock $dirfd, LOCK_UN;
-	return length > 0;
+	else {
+	    $_ .= $c;
+	}
+    }
+    sigprocmask SIG_SETMASK, $sigset_old;
+    flock $dirfd, LOCK_UN;
+    return length > 0;
 }
 
 use constant {
-	tsPacketSize => 188,
-	tsSyncByte => 'G',
+    tsPacketSize => 188,
+    tsSyncByte => 'G',
 };
 
 my $rc; # exit status, sticky
@@ -92,72 +92,72 @@ sub check_ts () {
 }
 
 sub download_chunk ($$) {
-	my ($url, $fname) = @_;
-	my $right_size;
-	$ua->add_handler(response_header => sub {
-		my $r = shift;
-		$right_size = $r->content_length if $r->code == 200;
-	});
-	my $r = $ua->get($url, ":content_file" => ".part$$");
-	$ua->remove_handler("response_header");
-	if ($r->code != 200) {
-		warn "$fname: ", $r->status_line;
-		$rc = 4 if $r->code == 404;
-		$rc ||= 1;
-		return;
-	}
-	if ($right_size and $right_size < 1 or
-	    $opt_hls and $right_size % tsPacketSize) {
-		warn "$fname: bad expected size: $right_size";
-		$rc ||= 1;
-		return;
-	}
-	my $size = -s ".part$$";
-	if (not $size) {
-		warn "$fname: empty output";
-		$rc ||= 1;
-		return;
-	}
-	if ($right_size and $size != $right_size or
-	    $opt_hls and $size % tsPacketSize) {
-		warn "$fname: wrong size";
-		$rc ||= 1;
-		return;
-	}
-	if ($opt_hls and not check_ts) {
-		warn "$fname: bad sync byte";
-		$rc ||= 1;
-		return;
-	}
-	return $size;
+    my ($url, $fname) = @_;
+    my $right_size;
+    $ua->add_handler(response_header => sub {
+	my $r = shift;
+	$right_size = $r->content_length if $r->code == 200;
+    });
+    my $r = $ua->get($url, ":content_file" => ".part$$");
+    $ua->remove_handler("response_header");
+    if ($r->code != 200) {
+	warn "$fname: ", $r->status_line;
+	$rc = 4 if $r->code == 404;
+	$rc ||= 1;
+	return;
+    }
+    if ($right_size and $right_size < 1 or
+	$opt_hls and $right_size % tsPacketSize) {
+	warn "$fname: bad expected size: $right_size";
+	$rc ||= 1;
+	return;
+    }
+    my $size = -s ".part$$";
+    if (not $size) {
+	warn "$fname: empty output";
+	$rc ||= 1;
+	return;
+    }
+    if ($right_size and $size != $right_size or
+	$opt_hls and $size % tsPacketSize) {
+	warn "$fname: wrong size";
+	$rc ||= 1;
+	return;
+    }
+    if ($opt_hls and not check_ts) {
+	warn "$fname: bad sync byte";
+	$rc ||= 1;
+	return;
+    }
+    return $size;
 }
 
 my $err; # consecutive errors, not sticky
 
 while (readLine) {
-	chomp;
-	unless (m#^\w+://#) {
-		$_ = "$dirURL/$_";
-	}
-	unless (m#^\w+://.+/([^\s/]+)\z#) {
-		warn "bad part: $_";
-		exit 4; # like 404
-	}
-	my ($url, $fname) = ($_, $1);
-	next if -s $fname;
-	if (my $size = download_chunk $url, $fname) {
-		$Size += $size;
-		rename ".part$$", $fname or die "$fname: $!";
-		undef $err;
-	}
-	else {
-		unlink ".part$$";
-		$err++;
-	}
-	# 404, won't be able to assemble
-	exit 4 if $rc == 4;
-	# a few consecutive errors, need to change proxy?
-	exit 3 if $err >= 3;
+    chomp;
+    unless (m#^\w+://#) {
+	$_ = "$dirURL/$_";
+    }
+    unless (m#^\w+://.+/([^\s/]+)\z#) {
+	warn "bad part: $_";
+	exit 4; # like 404
+    }
+    my ($url, $fname) = ($_, $1);
+    next if -s $fname;
+    if (my $size = download_chunk $url, $fname) {
+	$Size += $size;
+	rename ".part$$", $fname or die "$fname: $!";
+	undef $err;
+    }
+    else {
+	unlink ".part$$";
+	$err++;
+    }
+    # 404, won't be able to assemble
+    exit 4 if $rc == 4;
+    # a few consecutive errors, need to change proxy?
+    exit 3 if $err >= 3;
 }
 
 exit $rc;
