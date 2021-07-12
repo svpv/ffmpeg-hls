@@ -71,7 +71,6 @@ use constant {
     tsSyncByte => 'G',
 };
 
-my $rc; # exit status, sticky
 
 use Getopt::Long 2.24 qw(GetOptions :config gnu_getopt);
 GetOptions hls => \my $opt_hls, dash => \my $opt_dash
@@ -102,37 +101,32 @@ sub download_chunk ($$) {
     $ua->remove_handler("response_header");
     if ($r->code != 200) {
 	warn "$fname: ", $r->status_line;
-	$rc = 4 if $r->code == 404;
-	$rc ||= 1;
 	return;
     }
     if ($right_size and $right_size < 1 or
 	$opt_hls and $right_size % tsPacketSize) {
 	warn "$fname: bad expected size: $right_size";
-	$rc ||= 1;
 	return;
     }
     my $size = -s ".part$$";
     if (not $size) {
 	warn "$fname: empty output";
-	$rc ||= 1;
 	return;
     }
     if ($right_size and $size != $right_size or
 	$opt_hls and $size % tsPacketSize) {
 	warn "$fname: wrong size";
-	$rc ||= 1;
 	return;
     }
     if ($opt_hls and not check_ts) {
 	warn "$fname: bad sync byte";
-	$rc ||= 1;
 	return;
     }
     return $size;
 }
 
-my $err; # consecutive errors, not sticky
+my $rc;
+my @err; # a window to detect 3 out of 4 errors
 
 while (readLine) {
     chomp;
@@ -140,24 +134,25 @@ while (readLine) {
 	$_ = "$dirURL/$_";
     }
     unless (m#^\w+://.+/([^\s/]+)\z#) {
-	warn "bad part: $_";
-	exit 4; # like 404
+	die "bad part: $_";
     }
     my ($url, $fname) = ($_, $1);
     next if -s $fname;
     if (my $size = download_chunk $url, $fname) {
 	$Size += $size;
 	rename ".part$$", $fname or die "$fname: $!";
-	undef $err;
+	push @err, 0;
     }
     else {
 	unlink ".part$$";
-	$err++;
+	$rc = 1;
+	push @err, 1;
     }
-    # 404, won't be able to assemble
-    exit 4 if $rc == 4;
-    # a few consecutive errors, need to change proxy?
-    exit 3 if $err >= 3;
+    shift @err if @err > 4;
+    if ((grep $_, @err) >= 3) {
+	warn "too many errors";
+	exit 3;
+    }
 }
 
 exit $rc;
