@@ -172,6 +172,7 @@ RecheckParts()
 	local n=0 seg0=
 	if [ $type = dash ]; then
 		read -r seg0
+		seg0=${seg0%%\?*}
 		seg0=${seg0##*/}
 		if ! [ -s "${seg0:?}" ]; then
 			echo >&2 "${0##*/}: missing $seg0 (cannot happen)"
@@ -179,7 +180,9 @@ RecheckParts()
 		fi
 	fi
 	while read -r part; do
-		f=${part##*/}
+		f=$part
+		f=${f%%\?*}
+		f=${f##*/}
 		if ! [ -s "${f:?}" ]; then
 			echo >&2 "${0##*/}: missing $f (cannot happen)"
 			false
@@ -285,7 +288,7 @@ wGetHLS()
 		perl -ni -le 'print if /^#EXT/ or /^[^#]/' .m3u8
 		perl -pi -e 'BEGIN{$base=shift} s#^\Q$base\E/##' "${1%/*}" .m3u8
 		if grep '^[^#]' .m3u8 >.parts; then
-			perl -pi -e 's|^[^#].*/||' .m3u8
+			sed -i '/^[^#]/{s/[?].*//;s/.*\///}' .m3u8
 			wGetParts "${1%/*}" "${2%/*}"
 		else
 			echo "${0##*/}: no HLS segments"

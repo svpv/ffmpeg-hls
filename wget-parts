@@ -132,13 +132,10 @@ my @err; # a window to detect 3 out of 4 errors
 
 while (readLine) {
     chomp;
-    unless (m#^\w+://#) {
-	$_ = "$dirURL/$_";
-    }
-    unless (m#^\w+://.+/([^\s/]+)\z#) {
-	die "bad part: $_";
-    }
-    my ($url, $fname) = ($_, $1);
+    my $url = m#^\w+://# ? $_ : "$dirURL/$_";
+    s/[?].*//; s/.*\///;
+    die "bad part: $_" unless /\w/;
+    my $fname = $_;
     next if -s $fname;
     if (my $size = download_chunk $url, $fname) {
 	$Size += $size;
