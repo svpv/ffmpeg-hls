@@ -189,12 +189,11 @@ RecheckParts()
 		fi
 		if [ "$type" = dash ]; then
 			cat "$seg0" "$f" |
-			nice -5 ffmpeg -xerror -v error -i - -f null - 2>&1 |
-			stdbuf -oL sed "s|\t| |g;s|^|${part//|/\\|}\t|" &
+			nice -5 ffmpeg -v warning -i - -f null -
 		else
-			nice -5 ffmpeg -xerror -v error -i "$f" -f null - 2>&1 </dev/null |
-			stdbuf -oL sed "s|\t| |g;s|^|${part//|/\\|}\t|" &
-		fi
+			nice -5 ffmpeg -v warning -i "$f" -f null -
+		fi </dev/null 2>&1 |
+		stdbuf -oL awk -v part=$part '/\w/{$1=$1;print part"\t"$0}' &
 		(( ++n < 2 )) || wait -n
 	done >$tmpdir/parts.all-errors
 	wait
@@ -304,7 +303,7 @@ wGetHLS()
 			return 1
 		fi
 	fi
-	ffexam=(nice -5 ffmpeg -xerror -v warning -stats)
+	ffexam=(nice -5 ffmpeg -v warning -stats)
 	if [ "$type" = dash ]; then
 	    ffexam+=(-allowed_extensions ALL)
 	fi
