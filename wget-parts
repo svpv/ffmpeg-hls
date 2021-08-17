@@ -73,10 +73,12 @@ use constant {
 
 
 use Getopt::Long 2.24 qw(GetOptions :config gnu_getopt);
-GetOptions hls => \my $opt_hls, dash => \my $opt_dash
+GetOptions hls => \my $opt_hls, dash => \my $opt_dash,
+    'user-agent=s' => \my $opt_ua
     or die "getopt failed";
 my $dirURL = $ARGV[0] and @ARGV == 1
     or die "Usage: $0 dirURL <parts";
+$ua->agent($opt_ua) if $opt_ua;
 
 sub check_ts () {
     open my $fh, "<", ".part$$" or die $!;

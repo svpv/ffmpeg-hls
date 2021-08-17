@@ -3,7 +3,7 @@
 wGetO()
 {
 	wget=("$av0dir"/wget-progress "$1" wget)
-	wopt=(--timeout 30 --tries 3)
+	wopt=(--timeout 30 --tries 3 ${UA:+--user-agent="$UA"})
 	if ! { "${wget[@]}" "${wopt[@]}" -q -O "$@" && [ -s "$1" ]; }; then
 		if [ -n "${http_proxy-}" ]; then
 			update-uk-proxy --hls
@@ -115,12 +115,12 @@ EOF()
 Try1()
 {
 	local p="$1" b="$2"; shift 2
-	"$av0dir"/wget-parts --${type:?} "$b" && return
+	"$av0dir"/wget-parts --${type:?} ${UA:+--user-agent="$UA"} "$b" && return
 	while :; do
 		EOF && break
 		UpdateKidProxy $p ":" "$@" </dev/null
 		EOF && break
-		"$av0dir"/wget-parts --${type:?} "$b" && break
+		"$av0dir"/wget-parts --${type:?} ${UA:+--user-agent="$UA"} "$b" && break
 	done
 	return 1
 }
@@ -344,7 +344,7 @@ Last message repeated'
 	echo "$time" >.valid
 }
 
-argv=$(getopt -n "${0##*/}" -o X -l name:,audio:,video: -- "$@")
+argv=$(getopt -n "${0##*/}" -o X -l name:,audio:,video:,user-agent: -- "$@")
 eval set -- "$argv"
 while :; do
 	case "$1" in
@@ -353,6 +353,9 @@ while :; do
 			shift 2 ;;
 		--audio|--video)
 			dashopt+=("$1=${2:?}")
+			shift 2 ;;
+		--user-agent)
+			UA=${2:?}
 			shift 2 ;;
 		--)
 			shift
