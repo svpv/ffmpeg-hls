@@ -204,20 +204,23 @@ RecheckParts()
 	done >$tmpdir/parts.all-errors
 	wait
 	if grep -v "$tolera" $tmpdir/parts.all-errors >$tmpdir/parts.bad-errors; then
-		mv $tmpdir/parts.{bad,all}-errors
+		: got some bad errors, as expected
 	else
 		echo "${0##*/}: no bad errors in recheck (cannot happen)"
 		return 1
 	fi
+	# preparing for grouping, obliterate numeric details
+	perl -ni -le '($part, $_) = split /\t/, $_, 2;
+		s/\b0x[0-9a-f]+\b/0x42/g;
+		s/ -\d+\b/ 42/g; s/\b\d+\b/42/g;
+		print "$part\t$_"' $tmpdir/parts.bad-errors
 	# if some error is encountered in more than half of the parts,
 	# it's not a real error
-	perl -pi -e 's/ @ 0x[0-9a-f]+\]/]/' $tmpdir/parts.all-errors
-	perl -pi -e 's/\b(pts|dts|size)=\d+\b/$1=42/g' $tmpdir/parts.all-errors
-	sort -t$'\t' -u -k2,2 -k1,1 -o $tmpdir/parts.all-errors{,}
-	cut -f2 $tmpdir/parts.all-errors |uniq -c |
+	sort -t$'\t' -u -k2,2 -k1,1 -o $tmpdir/parts.bad-errors{,}
+	cut -f2 $tmpdir/parts.bad-errors |uniq -c |
 		awk -v n=$n '(n==1||$1<=n/2){sub(" +[0-9]+ ","");print}' |
 		sort -u >$tmpdir/parts.real-errors
-	join -t$'\t' -12 -21 -o 1.1 $tmpdir/parts.{all,real}-errors >$tmpdir/parts.ck
+	join -t$'\t' -12 -21 -o 1.1 $tmpdir/parts.{bad,real}-errors >$tmpdir/parts.ck
 	sort -u -o $tmpdir/parts.ck{,}
 	echo >&2 "${0##*/}: $(wc -l <$tmpdir/parts.ck) parts to recheck"
 	while read -r part; do
