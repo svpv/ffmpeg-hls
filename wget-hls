@@ -167,6 +167,12 @@ wGetParts()
 	return $rc
 }
 
+tolera='non-existing SPS 0 referenced in buffering period
+SPS unavailable in decode_picture_timing
+Application provided invalid, non.monotonically increasing dts to muxer
+Invalid timestamps stream=
+Last message repeated'
+
 RecheckParts()
 {
 	local n=0 seg0=
@@ -197,11 +203,16 @@ RecheckParts()
 		(( ++n < 2 )) || wait -n
 	done >$tmpdir/parts.all-errors
 	wait
+	if grep -v "$tolera" $tmpdir/parts.all-errors >$tmpdir/parts.bad-errors; then
+		mv $tmpdir/parts.{bad,all}-errors
+	else
+		echo "${0##*/}: no bad errors in recheck (cannot happen)"
+		return 1
+	fi
 	# if some error is encountered in more than half of the parts,
 	# it's not a real error
 	perl -pi -e 's/ @ 0x[0-9a-f]+\]/]/' $tmpdir/parts.all-errors
 	perl -pi -e 's/\b(pts|dts|size)=\d+\b/$1=42/g' $tmpdir/parts.all-errors
-	perl -pi -e 's/\b(dts to muxer in stream \d): \d+ >= \d+/$1/' $tmpdir/parts.all-errors
 	sort -t$'\t' -u -k2,2 -k1,1 -o $tmpdir/parts.all-errors{,}
 	cut -f2 $tmpdir/parts.all-errors |uniq -c |
 		awk -v n=$n '(n==1||$1<=n/2){sub(" +[0-9]+ ","");print}' |
@@ -310,11 +321,6 @@ wGetHLS()
 	rc=
 	"${ffexam[@]}" -i "$OUT" -f null - &>$tmpdir/fferr || rc=1
 	FixupExamLog $tmpdir/fferr
-	tolera='non-existing SPS 0 referenced in buffering period
-SPS unavailable in decode_picture_timing
-Application provided invalid, non.monotonically increasing dts to muxer
-Invalid timestamps stream=
-Last message repeated'
 	if grep -v "$tolera" $tmpdir/fferr >$tmpdir/baderr || [ -n "$rc" ]; then
 		echo >&2 "${0##*/}: rechecking"
 	else
