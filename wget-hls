@@ -219,10 +219,17 @@ RecheckParts()
 	sort -t$'\t' -u -k2,2 -k1,1 -o $tmpdir/parts.bad-errors{,}
 	cut -f2 $tmpdir/parts.bad-errors |uniq -c |
 		awk -v n=$n '(n==1||$1<=n/2){sub(" +[0-9]+ ","");print}' |
+		sort -u >$tmpdir/real-errors
+	join -t$'\t' -12 -21 -o '1.1 1.2' $tmpdir/{parts.bad,real}-errors |
 		sort -u >$tmpdir/parts.real-errors
-	join -t$'\t' -12 -21 -o 1.1 $tmpdir/parts.{bad,real}-errors >$tmpdir/parts.ck
-	sort -u -o $tmpdir/parts.ck{,}
-	echo >&2 "${0##*/}: $(wc -l <$tmpdir/parts.ck) parts to recheck"
+	cut -f1 $tmpdir/parts.real-errors |uniq >$tmpdir/parts.ck
+	echo "${0##*/}: $(wc -l <$tmpdir/parts.ck) part(s) to recheck:"
+	# show diagnostics
+	perl -n -le '($_, $err) = split /\t/, $_, 2;
+		s/[?].*//; s/.*\///;
+		print "$_\t$err"' <$tmpdir/parts.real-errors |
+		column -s$'\t' -t
+	# now recheck
 	while read -r part; do
 		f=${part##*/}
 		[[ $part = *://* ]] || part=${1%/*}/$part
@@ -325,7 +332,7 @@ wGetHLS()
 	"${ffexam[@]}" -i "$OUT" -f null - &>$tmpdir/fferr || rc=1
 	FixupExamLog $tmpdir/fferr
 	if grep -v "$tolera" $tmpdir/fferr >$tmpdir/baderr || [ -n "$rc" ]; then
-		echo >&2 "${0##*/}: rechecking"
+		echo "${0##*/}: got some errors, rechecking"
 	else
 		echo "$time" >.valid
 		return 0
