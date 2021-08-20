@@ -72,7 +72,7 @@ wGetStats()
 		if [ "$*" = "*" ]; then
 			set --
 		fi
-		printf '\r%s %*d/%d ' "${PWD##*/}" ${#n} $# $n
+		printf '\r%s %*d/%d  ' "${PWD##*/}" ${#n} $# $n
 		sleep 1
 	done
 }
