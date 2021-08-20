@@ -362,12 +362,13 @@ wGetHLS()
 	"${ffexam[@]}" -i "$OUT" -f null - &>$tmpdir/fferr || rc=1
 	FixupExamLog $tmpdir/fferr
 	# stream still corrupted?
-	if grep -v "$tolera" $tmpdir/fferr; then
-		echo "${0##*/}: cannot proceed"
+	if grep -v "$tolera" $tmpdir/fferr >$tmpdir/baderr; then
+		echo "${0##*/}: still got errors (cannot proceed):"
+		cat $tmpdir/baderr
 		return 1
 	elif [ -n "$rc" ]; then
+		echo "${0##*/}: still got errors (cannot proceed):"
 		cat $tmpdir/fferr
-		echo "${0##*/}: cannot proceed"
 		return 1
 	fi >&2
 	echo "$time" >.valid
