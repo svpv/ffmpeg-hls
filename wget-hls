@@ -220,11 +220,21 @@ RecheckParts()
 	cut -f2 $tmpdir/parts.bad-errors |uniq -c |
 		awk -v n=$n '(n==1||$1<=n/2){sub(" +[0-9]+ ","");print}' |
 		sort -u >$tmpdir/real-errors
+	join -t$'\t' -12 -21 -v1 -o '1.2' $tmpdir/{parts.bad,real}-errors |
+		sort -u >$tmpdir/common-errors
 	join -t$'\t' -12 -21 -o '1.1 1.2' $tmpdir/{parts.bad,real}-errors |
 		sort -u >$tmpdir/parts.real-errors
 	cut -f1 $tmpdir/parts.real-errors |uniq >$tmpdir/parts.ck
-	echo "${0##*/}: $(wc -l <$tmpdir/parts.ck) part(s) to recheck:"
 	# show diagnostics
+	if [ -s $tmpdir/common-errors ]; then
+		echo "${0##*/}: common errors (will be ignored):"
+		cat $tmpdir/common-errors
+	fi
+	if ! [ -s $tmpdir/parts.ck ]; then
+		echo "${0##*/}: no real errors in recheck (cannot happen)"
+		return 1
+	fi
+	echo "${0##*/}: $(wc -l <$tmpdir/parts.ck) part(s) to recheck:"
 	perl -n -le '($_, $err) = split /\t/, $_, 2;
 		s/[?].*//; s/.*\///;
 		print "$_\t$err"' <$tmpdir/parts.real-errors |
