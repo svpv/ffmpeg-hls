@@ -255,6 +255,7 @@ FixupExamLog()
 	sed -i '/^\(frame\|size\)=.* time=/d' $1
 }
 
+UA=
 OUT=
 time=
 type=
