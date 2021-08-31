@@ -302,7 +302,7 @@ wGetHLS()
 		cd "$hlsdir"
 		mv "$out1" .$ext
 		OUT=$PWD/.$ext
-		rmdir "$tmpdir"
+		rm -rf "$tmpdir"
 		untrap_tmpdir
 		tmpdir=$PWD/.tmp
 	else
