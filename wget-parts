@@ -74,7 +74,7 @@ use constant {
 
 use Getopt::Long 2.24 qw(GetOptions :config gnu_getopt);
 GetOptions hls => \my $opt_hls, dash => \my $opt_dash,
-    'user-agent=s' => \my $opt_ua
+    'user-agent=s' => \my $opt_ua, 'ref=s' => \my $opt_ref
     or die "getopt failed";
 my $dirURL = $ARGV[0] and @ARGV == 1
     or die "Usage: $0 dirURL <parts";
@@ -127,6 +127,8 @@ sub download_chunk ($$) {
     return $size;
 }
 
+use File::Compare qw(compare);
+
 my $rc;
 my @err; # a window to detect 3 out of 4 errors
 
@@ -139,7 +141,11 @@ while (readLine) {
     next if -s $fname;
     if (my $size = download_chunk $url, $fname) {
 	$Size += $size;
-	rename ".part$$", $fname or die "$fname: $!";
+	rename ".part$$", $fname or die "rename: $!";
+	if ($opt_ref and compare("$opt_ref/$fname", "$fname") == 0) {
+	    unlink $fname;
+	    link "$opt_ref/$fname", $fname or die "link: $!";
+	}
 	push @err, 0;
     }
     else {
